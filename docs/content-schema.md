@@ -62,6 +62,7 @@ Expected source structure:
 - Project Gutenberg header/footer markers
 - chapter headings like `CHAPTER I`, `CHAPTER II`, or `CHAPTER 3`
 - optional chapter title on the next non-blank line
+- or inline Gutenberg headings like `CHAPTER I. A Stormy Beginning`, including wrapped continuation lines before the first blank line
 - body paragraphs separated by blank lines
 
 Output shape:

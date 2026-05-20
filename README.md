@@ -12,6 +12,9 @@ It is built around a clean split between:
 - `chaptered` — one HTML page per chapter with a generated table of contents
 
 Both profiles currently support `gutenberg-txt` inputs.
+The `chaptered` parser now handles both of these Gutenberg heading patterns:
+- `CHAPTER I` followed by a title on the next non-blank line
+- `CHAPTER I. Inline title text` with wrapped title lines before the first blank line
 
 ## Local development
 
@@ -51,3 +54,14 @@ It:
 - installs Python 3.11
 - installs the package in editable mode
 - runs the test suite
+
+## Git identity hygiene
+
+This repo includes a `.mailmap` so historical commits with the old `cduffy@ranchcryogenics.com` author email are normalized to `spinchange@gmail.com` in tools that honor mailmap.
+
+To pin the repo-local author identity for future commits:
+
+```bash
+git config user.name 'Chris Duffy'
+git config user.email 'spinchange@gmail.com'
+```

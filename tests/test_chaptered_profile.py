@@ -23,6 +23,45 @@ This is chapter two.
 *** END OF THE PROJECT GUTENBERG EBOOK SAMPLE CHAPTERED BOOK ***
 """
 
+INLINE_HEADING_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK THE ADVENTURES OF TOM SAWYER ***
+
+CHAPTER I. Y-o-u-u Tom—Aunt Polly Decides Upon her Duty—Tom Practices
+Music—The Challenge—A Private Entrance
+
+“Tom!”
+
+No answer.
+
+CHAPTER II. Strong Temptations—Strategic Movements—The Innocents
+Beguiled
+
+Saturday morning was come.
+
+*** END OF THE PROJECT GUTENBERG EBOOK THE ADVENTURES OF TOM SAWYER ***
+"""
+
+TOC_THEN_BODY_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK THE ADVENTURES OF TOM SAWYER ***
+
+CHAPTER I. Y-o-u-u Tom—Aunt Polly Decides Upon her Duty—Tom Practices
+Music—The Challenge—A Private Entrance
+CHAPTER II. Strong Temptations—Strategic Movements—The Innocents
+Beguiled
+
+By and by, they drifted apart.
+
+CHAPTER I
+
+“Tom!”
+
+No answer.
+
+CHAPTER II
+
+Saturday morning was come.
+
+*** END OF THE PROJECT GUTENBERG EBOOK THE ADVENTURES OF TOM SAWYER ***
+"""
+
 
 def test_parse_chaptered_text_splits_chapters_and_paragraphs(tmp_path: Path) -> None:
     source = tmp_path / "sample.txt"
@@ -36,6 +75,32 @@ def test_parse_chaptered_text_splits_chapters_and_paragraphs(tmp_path: Path) -> 
     assert sections[0].body == ["This is the first paragraph.", "This is the second paragraph."]
     assert sections[1].title == "Another Turn"
     assert sections[1].body == ["This is chapter two."]
+
+
+def test_parse_chaptered_text_supports_inline_gutenberg_chapter_headings(tmp_path: Path) -> None:
+    source = tmp_path / "tom-sawyer-sample.txt"
+    source.write_text(INLINE_HEADING_TEXT, encoding="utf-8")
+
+    sections = parse_chaptered_text(source, "The Adventures of Tom Sawyer")
+
+    assert [section.id for section in sections] == ["chapter-i", "chapter-ii"]
+    assert sections[0].label == "Chapter I"
+    assert sections[0].title == "Y-o-u-u Tom—Aunt Polly Decides Upon her Duty—Tom Practices Music—The Challenge—A Private Entrance"
+    assert sections[0].body == ["“Tom!”", "No answer."]
+    assert sections[1].title == "Strong Temptations—Strategic Movements—The Innocents Beguiled"
+    assert sections[1].body == ["Saturday morning was come."]
+
+
+def test_parse_chaptered_text_skips_table_of_contents_entries(tmp_path: Path) -> None:
+    source = tmp_path / "tom-sawyer-with-toc.txt"
+    source.write_text(TOC_THEN_BODY_TEXT, encoding="utf-8")
+
+    sections = parse_chaptered_text(source, "The Adventures of Tom Sawyer")
+
+    assert [section.id for section in sections] == ["chapter-i", "chapter-ii"]
+    assert sections[0].title == "Y-o-u-u Tom—Aunt Polly Decides Upon her Duty—Tom Practices Music—The Challenge—A Private Entrance"
+    assert sections[0].body == ["“Tom!”", "No answer."]
+    assert sections[1].body == ["Saturday morning was come."]
 
 
 def test_build_library_supports_chaptered_and_epistolary_books(tmp_path: Path) -> None:
