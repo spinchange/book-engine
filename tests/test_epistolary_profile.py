@@ -50,6 +50,76 @@ Your letter reached me.
 """
 
 
+CLARISSA_STYLE_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK CLARISSA SAMPLE ***
+
+SUMMARY OF THE LETTERS OF VOLUME I
+
+LETTER I. Miss Howe to Miss Clarissa Harlowe.—Summary text.
+
+THE HISTORY OF CLARISSA HARLOWE
+
+LETTER I
+
+MISS ANNA HOWE, TO MISS CLARISSA HARLOWE JAN 10.
+
+I am extremely concerned, my dearest friend.
+
+LETTER II
+
+MISS CLARISSA HARLOWE, TO MISS ANNA HOWE JAN. 11.
+
+I will obey your commands.
+
+*** END OF THE PROJECT GUTENBERG EBOOK CLARISSA SAMPLE ***
+"""
+
+
+CLARISSA_SPLIT_SUMMARY_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK CLARISSA SAMPLE ***
+
+SUMMARY OF THE LETTERS OF VOLUME I
+
+LETTER I
+
+MISS HOWE TO MISS CLARISSA HARLOWE.
+
+Summary text.
+
+THE HISTORY OF CLARISSA HARLOWE
+
+LETTER I
+
+MISS ANNA HOWE, TO MISS CLARISSA HARLOWE JAN 10.
+
+I am extremely concerned, my dearest friend.
+
+LETTER II
+
+TO ROBERT LOVELACE, ESQ. TUESDAY NIGHT, APRIL 18.
+
+DEAR SIR,
+
+This is a line-start TO heading.
+
+LETTER III
+
+MISS CLARISSA HARLOWE [IN CONTINUATION.]
+
+This is a continuation heading.
+
+LETTER IV
+
+MR. LOVELACE
+
+[IN CONTINUATION.]
+
+THURSDAY, JULY 20.
+
+This is a multiline continuation heading.
+
+*** END OF THE PROJECT GUTENBERG EBOOK CLARISSA SAMPLE ***
+"""
+
+
 def test_extract_gutenberg_main_text_accepts_numeric_ebook_markers() -> None:
     main = extract_gutenberg_main_text(HUMPHRY_CLINKER_TEXT, "The Expedition of Humphry Clinker")
 
@@ -80,13 +150,47 @@ def test_parse_gutenberg_epistolary_supports_to_line_letters(tmp_path: Path) -> 
     ]
 
 
+def test_parse_gutenberg_epistolary_supports_clarissa_style_letter_headings(tmp_path: Path) -> None:
+    source = tmp_path / "clarissa-sample.txt"
+    source.write_text(CLARISSA_STYLE_TEXT, encoding="utf-8")
+
+    sections = parse_gutenberg_epistolary(source, "Clarissa Sample")
+
+    assert [section.id for section in sections] == ["letter-i", "letter-ii"]
+    assert [section.label for section in sections] == ["Letter I", "Letter II"]
+    assert sections[0].title == "MISS ANNA HOWE, TO MISS CLARISSA HARLOWE JAN 10."
+    assert sections[0].subtitle == ""
+    assert sections[0].body == ["I am extremely concerned, my dearest friend."]
+    assert sections[1].title == "MISS CLARISSA HARLOWE, TO MISS ANNA HOWE JAN. 11."
+    assert sections[1].body == ["I will obey your commands."]
+
+
+def test_parse_gutenberg_epistolary_skips_split_summary_and_supports_additional_clarissa_headers(tmp_path: Path) -> None:
+    source = tmp_path / "clarissa-split-summary.txt"
+    source.write_text(CLARISSA_SPLIT_SUMMARY_TEXT, encoding="utf-8")
+
+    sections = parse_gutenberg_epistolary(source, "Clarissa Sample")
+
+    assert [section.id for section in sections] == ["letter-i", "letter-ii", "letter-iii", "letter-iv"]
+    assert sections[0].title == "MISS ANNA HOWE, TO MISS CLARISSA HARLOWE JAN 10."
+    assert sections[1].title == "TO ROBERT LOVELACE, ESQ. TUESDAY NIGHT, APRIL 18."
+    assert sections[1].body == ["DEAR SIR,", "This is a line-start TO heading."]
+    assert sections[2].title == "MISS CLARISSA HARLOWE [IN CONTINUATION.]"
+    assert sections[2].body == ["This is a continuation heading."]
+    assert sections[3].title == "MR. LOVELACE [IN CONTINUATION.]"
+    assert sections[3].subtitle == "THURSDAY, JULY 20."
+    assert sections[3].body == ["This is a multiline continuation heading."]
+
+
 def test_build_library_supports_humphry_clinker_style_epistolary_book(tmp_path: Path) -> None:
     content_root = tmp_path / "library"
     books_dir = content_root / "books"
     book_dir = books_dir / "humphry-clinker"
     sample_dir = books_dir / "sample-letters"
+    clarissa_dir = books_dir / "clarissa-sample"
     book_dir.mkdir(parents=True)
     sample_dir.mkdir(parents=True)
+    clarissa_dir.mkdir(parents=True)
 
     (content_root / "library.yaml").write_text(
         """title: Mixed Library
@@ -125,6 +229,21 @@ theme: classic-paper
     )
     (sample_dir / "source.txt").write_text(SAMPLE_LETTERS_TEXT, encoding="utf-8")
 
+    (clarissa_dir / "book.yaml").write_text(
+        """id: clarissa-sample
+title: Clarissa Sample
+author: Samuel Richardson
+year: \"1748\"
+source_file: source.txt
+source_format: gutenberg-txt
+profile: epistolary
+parser: gutenberg-letters-v1
+theme: classic-paper
+""",
+        encoding="utf-8",
+    )
+    (clarissa_dir / "source.txt").write_text(CLARISSA_STYLE_TEXT, encoding="utf-8")
+
     output_dir = build_library(content_root)
 
     assert (output_dir / "index.html").exists()
@@ -132,3 +251,5 @@ theme: classic-paper
     assert (output_dir / "books" / "humphry-clinker" / "letter-2.html").exists()
     assert (output_dir / "books" / "sample-letters" / "letter-i.html").exists()
     assert (output_dir / "books" / "sample-letters" / "letter-ii.html").exists()
+    assert (output_dir / "books" / "clarissa-sample" / "letter-i.html").exists()
+    assert (output_dir / "books" / "clarissa-sample" / "letter-ii.html").exists()

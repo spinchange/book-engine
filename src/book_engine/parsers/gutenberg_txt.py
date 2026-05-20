@@ -46,6 +46,130 @@ def _looks_like_to_line_heading(lines: list[str], index: int) -> bool:
     return bool(tail)
 
 
+def _is_uppercaseish(line: str) -> bool:
+    letters = [ch for ch in line if ch.isalpha()]
+    if not letters:
+        return False
+    uppercase_letters = sum(1 for ch in letters if ch.isupper())
+    return uppercase_letters / len(letters) >= 0.7
+
+
+
+def _looks_like_date_line(line: str) -> bool:
+    header = line.strip().upper()
+    if not header:
+        return False
+    month_tokens = {
+        "JAN",
+        "FEB",
+        "MAR",
+        "APR",
+        "MAY",
+        "JUN",
+        "JUL",
+        "AUG",
+        "SEP",
+        "SEPT",
+        "OCT",
+        "NOV",
+        "DEC",
+        "MONDAY",
+        "TUESDAY",
+        "WEDNESDAY",
+        "THURSDAY",
+        "FRIDAY",
+        "SATURDAY",
+        "SUNDAY",
+    }
+    return any(token in header for token in month_tokens) and any(ch.isdigit() for ch in header)
+
+
+
+def _looks_like_correspondent_header(lines: list[str]) -> bool:
+    if not lines:
+        return False
+
+    first = lines[0].strip()
+    first_upper = first.upper()
+    if (
+        first_upper.startswith("TO ")
+        or first_upper.startswith("FROM ")
+        or ((_is_uppercaseish(first) and " TO " in first_upper))
+        or ((_is_uppercaseish(first) and " FROM " in first_upper))
+        or "[IN " in first_upper
+        or "[ENCLOSED " in first_upper
+    ):
+        return True
+
+    second = lines[1].strip() if len(lines) > 1 else ""
+    second_upper = second.upper()
+    if _is_uppercaseish(first) and (
+        second_upper.startswith("[IN ") or second_upper.startswith("[ENCLOSED ")
+    ):
+        return True
+
+    if _is_uppercaseish(first) and _looks_like_date_line(second):
+        return True
+
+    third = lines[2].strip() if len(lines) > 2 else ""
+    if _is_uppercaseish(first) and (
+        second_upper.startswith("[IN ") or second_upper.startswith("[ENCLOSED ")
+    ) and _looks_like_date_line(third):
+        return True
+
+    return False
+
+
+
+def _looks_like_letter_heading(lines: list[str], index: int) -> bool:
+    heading = lines[index].strip()
+    if not re.fullmatch(r"LETTER\s+[IVXLCDM]+\.?", heading):
+        return False
+
+    tail = [ln.strip() for ln in lines[index + 1 : index + 6] if ln.strip()]
+    return _looks_like_correspondent_header(tail)
+
+
+def _find_letter_heading_start(lines: list[str]) -> int | None:
+    candidates = [i for i in range(len(lines)) if _looks_like_letter_heading(lines, i)]
+    if not candidates:
+        return None
+
+    history_markers = [
+        i for i, line in enumerate(lines) if line.strip().upper().startswith("THE HISTORY OF ")
+    ]
+    if history_markers:
+        marker = history_markers[-1]
+        for candidate in candidates:
+            if candidate > marker:
+                return candidate
+
+    return candidates[0]
+
+
+
+def _split_letter_heading_paragraphs(paras: list[str], fallback_label: str) -> tuple[str, str, list[str]]:
+    if not paras:
+        return f"Letter {fallback_label}", "", []
+
+    title_text = paras[0]
+    body_start = 1
+    subtitle = ""
+
+    if len(paras) > 1 and (
+        paras[1].upper().startswith("[IN ") or paras[1].upper().startswith("[ENCLOSED ")
+    ):
+        title_text = f"{title_text} {paras[1]}"
+        body_start = 2
+
+    if len(paras) > body_start and _looks_like_date_line(paras[body_start]):
+        subtitle = paras[body_start]
+        body_start += 1
+
+    return title_text, subtitle, paras[body_start:]
+
+
+
 def parse_gutenberg_epistolary(source_path: Path, title: str) -> list[Section]:
     text = source_path.read_text(encoding="utf-8", errors="replace")
     main_text = extract_gutenberg_main_text(text, title)
@@ -53,10 +177,15 @@ def parse_gutenberg_epistolary(source_path: Path, title: str) -> list[Section]:
 
     heading_mode = None
     start_idx = None
+    letter_heading_start = _find_letter_heading_start(lines)
     for i in range(len(lines) - 1):
         if _looks_like_roman_epistolary_heading(lines, i):
             start_idx = i
             heading_mode = "roman"
+            break
+        if letter_heading_start == i:
+            start_idx = letter_heading_start
+            heading_mode = "letter-heading"
             break
         if _looks_like_to_line_heading(lines, i):
             start_idx = i
@@ -73,6 +202,12 @@ def parse_gutenberg_epistolary(source_path: Path, title: str) -> list[Section]:
                 headings.append((i, s))
             elif s == "CONCLUSION":
                 headings.append((i, s))
+    elif heading_mode == "letter-heading":
+        for i in range(start_idx, len(lines)):
+            if _looks_like_letter_heading(lines, i):
+                match = re.fullmatch(r"LETTER\s+([IVXLCDM]+)\.?", lines[i].strip())
+                if match:
+                    headings.append((i, match.group(1)))
     else:
         for i in range(start_idx, len(lines)):
             if _looks_like_to_line_heading(lines, i):
@@ -97,6 +232,10 @@ def parse_gutenberg_epistolary(source_path: Path, title: str) -> list[Section]:
                 body = body[1:]
             sec_id = "conclusion" if label == "CONCLUSION" else f"letter-{label.lower()}"
             sec_label = label if label == "CONCLUSION" else f"Letter {label}"
+        elif heading_mode == "letter-heading":
+            title_text, subtitle, body = _split_letter_heading_paragraphs(paras, label)
+            sec_id = f"letter-{label.lower()}"
+            sec_label = f"Letter {label}"
         else:
             title_text = chunk_lines[0].strip()
             subtitle = paras[0] if paras and len(paras[0]) < 80 else ""
