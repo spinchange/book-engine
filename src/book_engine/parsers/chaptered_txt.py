@@ -8,12 +8,48 @@ from .gutenberg_txt import extract_gutenberg_main_text
 
 
 def _paragraphize(raw_body: str) -> list[str]:
+    lines = raw_body.split("\n")
+    blank_runs_between_content: list[int] = []
+    seen_content = False
+    blank_run = 0
+    for line in lines:
+        if line.strip():
+            if seen_content and blank_run > 0:
+                blank_runs_between_content.append(blank_run)
+            seen_content = True
+            blank_run = 0
+        else:
+            blank_run += 1
+
+    sparse_wrapped_mode = (
+        any(run >= 2 for run in blank_runs_between_content)
+        and sum(1 for run in blank_runs_between_content if run == 1)
+        > sum(1 for run in blank_runs_between_content if run >= 2)
+    )
+
+    if not sparse_wrapped_mode:
+        return [
+            re.sub(r"\s+", " ", part.strip())
+            for part in re.split(r"\n\s*\n", raw_body)
+            if part.strip()
+        ]
+
     paras: list[str] = []
-    for part in re.split(r"\n\s*\n", raw_body):
-        paragraph = re.sub(r"\s+", " ", part.strip())
-        if paragraph:
-            paras.append(paragraph)
-    return paras
+    current_lines: list[str] = []
+    blank_run = 0
+    for line in lines:
+        stripped = line.strip()
+        if stripped:
+            if blank_run >= 2 and current_lines:
+                paras.append(" ".join(current_lines))
+                current_lines = []
+            current_lines.append(stripped)
+            blank_run = 0
+        else:
+            blank_run += 1
+    if current_lines:
+        paras.append(" ".join(current_lines))
+    return [re.sub(r"\s+", " ", paragraph).strip() for paragraph in paras if paragraph.strip()]
 
 
 def _parse_heading(line: str) -> tuple[str, str] | None:
@@ -47,6 +83,34 @@ def _collect_wrapped_heading_title(lines: list[str], start_index: int, inline_ti
         probe_index += 1
 
     return re.sub(r"\s+", " ", " ".join(title_parts)).strip()
+
+
+def _consume_sparse_wrapped_title_block(chunk_lines: list[str]) -> tuple[list[str], list[str]] | None:
+    probe_index = 0
+    while probe_index < len(chunk_lines) and not chunk_lines[probe_index].strip():
+        probe_index += 1
+
+    if probe_index >= len(chunk_lines):
+        return None
+
+    title_parts: list[str] = []
+    blank_run = 0
+    scan_index = probe_index
+    while scan_index < len(chunk_lines):
+        candidate = chunk_lines[scan_index].strip()
+        if candidate.startswith("CHAPTER "):
+            break
+        if candidate:
+            title_parts.append(candidate)
+            blank_run = 0
+        else:
+            blank_run += 1
+            if blank_run >= 2:
+                remainder = chunk_lines[scan_index:]
+                return title_parts, remainder
+        scan_index += 1
+
+    return None
 
 
 def parse_chaptered_text(source_path: Path, title: str) -> list[Section]:
@@ -97,11 +161,15 @@ def parse_chaptered_text(source_path: Path, title: str) -> list[Section]:
                 chunk_lines.pop(0)
             if label in toc_titles:
                 title_parts.append(toc_titles[label])
-            elif chunk_lines and chunk_lines[0].strip():
-                while chunk_lines and chunk_lines[0].strip():
-                    title_parts.append(chunk_lines.pop(0).strip())
-                while chunk_lines and not chunk_lines[0].strip():
-                    chunk_lines.pop(0)
+            else:
+                sparse_wrapped_title = _consume_sparse_wrapped_title_block(chunk_lines)
+                if sparse_wrapped_title is not None:
+                    title_parts, chunk_lines = sparse_wrapped_title
+                elif chunk_lines and chunk_lines[0].strip():
+                    while chunk_lines and chunk_lines[0].strip():
+                        title_parts.append(chunk_lines.pop(0).strip())
+                    while chunk_lines and not chunk_lines[0].strip():
+                        chunk_lines.pop(0)
 
         raw_body = "\n".join(chunk_lines).strip()
         body = _paragraphize(raw_body)

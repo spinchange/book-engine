@@ -62,6 +62,63 @@ Saturday morning was come.
 *** END OF THE PROJECT GUTENBERG EBOOK THE ADVENTURES OF TOM SAWYER ***
 """
 
+TOC_WITH_SPARSE_WRAPPED_BODY_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK THE ADVENTURES OF TOM SAWYER ***
+
+CHAPTER I. Y-o-u-u Tom—Aunt Polly Decides Upon her Duty—Tom Practices
+Music—The Challenge—A Private Entrance
+CHAPTER II. Strong Temptations—Strategic Movements—The Innocents
+Beguiled
+
+CHAPTER I
+
+
+“Tom!”
+
+No answer.
+
+
+The old lady pulled her spectacles down and looked over them about the
+
+room.
+
+
+CHAPTER II
+
+Saturday morning was come.
+
+*** END OF THE PROJECT GUTENBERG EBOOK THE ADVENTURES OF TOM SAWYER ***
+"""
+
+WRAPPED_SYNOPSIS_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK THE DIARY OF A NOBODY ***
+
+CHAPTER II
+
+
+
+
+Tradesmen and the scraper still troublesome.  Gowing rather tiresome with
+
+his complaints of the paint.  I make one of the best jokes of my life.
+
+Delights of Gardening.  Mr. Stillbrook, Gowing, Cummings, and I have a
+
+little misunderstanding.  Sarah makes me look a fool before Cummings.
+
+
+
+APRIL 9.—Commenced the morning badly.
+
+The butcher called.
+
+
+
+APRIL 10.—Farmerson came round to attend to the scraper himself.
+
+He seems a very civil fellow.
+
+*** END OF THE PROJECT GUTENBERG EBOOK THE DIARY OF A NOBODY ***
+"""
+
 
 def test_parse_chaptered_text_splits_chapters_and_paragraphs(tmp_path: Path) -> None:
     source = tmp_path / "sample.txt"
@@ -101,6 +158,40 @@ def test_parse_chaptered_text_skips_table_of_contents_entries(tmp_path: Path) ->
     assert sections[0].title == "Y-o-u-u Tom—Aunt Polly Decides Upon her Duty—Tom Practices Music—The Challenge—A Private Entrance"
     assert sections[0].body == ["“Tom!”", "No answer."]
     assert sections[1].body == ["Saturday morning was come."]
+
+
+def test_parse_chaptered_text_prefers_toc_title_over_sparse_body_probe(tmp_path: Path) -> None:
+    source = tmp_path / "tom-sawyer-with-toc-and-sparse-body.txt"
+    source.write_text(TOC_WITH_SPARSE_WRAPPED_BODY_TEXT, encoding="utf-8")
+
+    sections = parse_chaptered_text(source, "The Adventures of Tom Sawyer")
+
+    assert [section.id for section in sections] == ["chapter-i", "chapter-ii"]
+    assert sections[0].title == "Y-o-u-u Tom—Aunt Polly Decides Upon her Duty—Tom Practices Music—The Challenge—A Private Entrance"
+    assert sections[0].body == [
+        "“Tom!” No answer.",
+        "The old lady pulled her spectacles down and looked over them about the room.",
+    ]
+    assert sections[1].body == ["Saturday morning was come."]
+
+
+def test_parse_chaptered_text_preserves_wrapped_authorial_synopsis(tmp_path: Path) -> None:
+    source = tmp_path / "diary-of-a-nobody.txt"
+    source.write_text(WRAPPED_SYNOPSIS_TEXT, encoding="utf-8")
+
+    sections = parse_chaptered_text(source, "The Diary of a Nobody")
+
+    assert [section.id for section in sections] == ["chapter-ii"]
+    assert sections[0].title == (
+        "Tradesmen and the scraper still troublesome. Gowing rather tiresome with "
+        "his complaints of the paint. I make one of the best jokes of my life. "
+        "Delights of Gardening. Mr. Stillbrook, Gowing, Cummings, and I have a "
+        "little misunderstanding. Sarah makes me look a fool before Cummings."
+    )
+    assert sections[0].body == [
+        "APRIL 9.—Commenced the morning badly. The butcher called.",
+        "APRIL 10.—Farmerson came round to attend to the scraper himself. He seems a very civil fellow.",
+    ]
 
 
 def test_build_library_supports_chaptered_and_epistolary_books(tmp_path: Path) -> None:
