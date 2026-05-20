@@ -52,21 +52,43 @@ def _paragraphize(raw_body: str) -> list[str]:
     return [re.sub(r"\s+", " ", paragraph).strip() for paragraph in paras if paragraph.strip()]
 
 
-def _parse_heading(line: str) -> tuple[str, str] | None:
+def _parse_heading(line: str) -> tuple[str, str, str] | None:
     stripped = line.strip()
-    prefix = "CHAPTER "
-    if not stripped.startswith(prefix):
-        return None
 
-    remainder = stripped[len(prefix) :]
-    match = re.match(r"([IVXLCDM]+|\d+)(.*)$", remainder)
-    if not match:
-        return None
+    for prefix, kind in (("CHAPTER ", "chapter"), ("BOOK ", "book")):
+        if not stripped.startswith(prefix):
+            continue
 
-    numeral = match.group(1)
-    trailing = match.group(2).strip()
-    inline_title = trailing.lstrip(".:-— ").strip()
-    return f"CHAPTER {numeral}", inline_title
+        remainder = stripped[len(prefix) :]
+        match = re.match(r"([IVXLCDM]+|\d+)(.*)$", remainder)
+        if not match:
+            return None
+
+        numeral = match.group(1)
+        trailing = match.group(2).strip()
+        inline_title = trailing.lstrip(".:-— ").strip()
+        return kind, f"{prefix.strip()} {numeral}", inline_title
+
+    if re.fullmatch(r"THE EDITOR TO THE READER\.?", stripped):
+        return "editorial", "THE EDITOR TO THE READER", ""
+
+    return None
+
+
+def _looks_like_short_date_heading(text: str) -> bool:
+    cleaned = text.strip().rstrip(".")
+    if not cleaned:
+        return False
+
+    month_match = re.fullmatch(
+        r"(?:JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)\s+\d{1,2}(?:,\s*\d{4})?",
+        cleaned,
+    )
+    weekday_match = re.fullmatch(
+        r"(?:MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY),\s+\d{1,2}(?:\s+[A-Z]+)*",
+        cleaned,
+    )
+    return bool(month_match or weekday_match)
 
 
 def _collect_wrapped_heading_title(lines: list[str], start_index: int, inline_title: str) -> str:
@@ -118,37 +140,39 @@ def parse_chaptered_text(source_path: Path, title: str) -> list[Section]:
     main_text = extract_gutenberg_main_text(text, title)
     lines = [line.rstrip() for line in main_text.split("\n")]
 
-    headings: list[tuple[int, str, str]] = []
+    headings: list[tuple[int, str, str, str]] = []
     toc_titles: dict[str, str] = {}
     for index, line in enumerate(lines):
         parsed = _parse_heading(line)
         if not parsed:
             continue
-        label, inline_title = parsed
-        headings.append((index, label, inline_title))
-        if inline_title and label not in toc_titles:
+        kind, label, inline_title = parsed
+        headings.append((index, kind, label, inline_title))
+        if kind == "chapter" and inline_title and label not in toc_titles:
             toc_titles[label] = _collect_wrapped_heading_title(lines, index, inline_title)
 
     if not headings:
         raise RuntimeError("Could not locate any chapter headings")
 
-    deduped_reversed: list[tuple[int, str, str]] = []
-    seen_labels: set[str] = set()
+    deduped_reversed: list[tuple[int, str, str, str]] = []
+    seen_labels: set[tuple[str, str]] = set()
     for heading in reversed(headings):
-        _, label, _ = heading
-        if label in seen_labels:
+        _, kind, label, _ = heading
+        heading_key = (kind, label)
+        if heading_key in seen_labels:
             continue
-        seen_labels.add(label)
+        seen_labels.add(heading_key)
         deduped_reversed.append(heading)
     headings = list(reversed(deduped_reversed))
 
     sections: list[Section] = []
-    for order, (start_index, label, inline_title) in enumerate(headings, start=1):
+    for order, (start_index, kind, label, inline_title) in enumerate(headings, start=1):
         end_index = headings[order][0] if order < len(headings) else len(lines)
         chunk_lines = lines[start_index + 1 : end_index]
 
         title_parts: list[str] = []
-        if inline_title:
+        subtitle = ""
+        if kind == "chapter" and inline_title:
             title_parts.append(inline_title)
             while chunk_lines and not chunk_lines[0].strip():
                 chunk_lines.pop(0)
@@ -156,7 +180,7 @@ def parse_chaptered_text(source_path: Path, title: str) -> list[Section]:
                 title_parts.append(chunk_lines.pop(0).strip())
             while chunk_lines and not chunk_lines[0].strip():
                 chunk_lines.pop(0)
-        else:
+        elif kind == "chapter":
             while chunk_lines and not chunk_lines[0].strip():
                 chunk_lines.pop(0)
             if label in toc_titles:
@@ -171,18 +195,36 @@ def parse_chaptered_text(source_path: Path, title: str) -> list[Section]:
                     while chunk_lines and not chunk_lines[0].strip():
                         chunk_lines.pop(0)
 
+        else:
+            while chunk_lines and not chunk_lines[0].strip():
+                chunk_lines.pop(0)
+
         raw_body = "\n".join(chunk_lines).strip()
         body = _paragraphize(raw_body)
-        chapter_id = label.lower().replace(" ", "-")
-        readable_label = f"Chapter {label.split(maxsplit=1)[1]}"
-        title_line = re.sub(r"\s+", " ", " ".join(title_parts)).strip()
+
+        if kind == "chapter":
+            section_id = label.lower().replace(" ", "-")
+            readable_label = f"Chapter {label.split(maxsplit=1)[1]}"
+            title_line = re.sub(r"\s+", " ", " ".join(title_parts)).strip()
+        elif kind == "book":
+            section_id = label.lower().replace(" ", "-")
+            readable_label = f"Book {label.split(maxsplit=1)[1]}"
+            title_line = readable_label
+            if body and _looks_like_short_date_heading(body[0].upper()):
+                subtitle = body[0]
+                body = body[1:]
+        else:
+            section_id = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")
+            readable_label = "Editor"
+            title_line = "The Editor to the Reader"
+
         sections.append(
             Section(
-                id=chapter_id,
+                id=section_id,
                 order=order,
                 label=readable_label,
                 title=title_line or readable_label,
-                subtitle="",
+                subtitle=subtitle,
                 body=body,
             )
         )

@@ -119,6 +119,35 @@ He seems a very civil fellow.
 *** END OF THE PROJECT GUTENBERG EBOOK THE DIARY OF A NOBODY ***
 """
 
+WERTHER_STYLE_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK 2527 ***
+
+PREFACE
+
+This is preface material.
+
+BOOK I
+
+MAY 4.
+
+How happy I am that I am gone!
+
+MAY 10.
+
+A wonderful serenity has taken possession of my entire soul.
+
+BOOK II.
+
+OCTOBER 20.
+
+We arrived here yesterday.
+
+THE EDITOR TO THE READER.
+
+It is a matter of extreme regret that we want original evidence.
+
+*** END OF THE PROJECT GUTENBERG EBOOK 2527 ***
+"""
+
 
 def test_parse_chaptered_text_splits_chapters_and_paragraphs(tmp_path: Path) -> None:
     source = tmp_path / "sample.txt"
@@ -191,6 +220,31 @@ def test_parse_chaptered_text_preserves_wrapped_authorial_synopsis(tmp_path: Pat
     assert sections[0].body == [
         "APRIL 9.—Commenced the morning badly. The butcher called.",
         "APRIL 10.—Farmerson came round to attend to the scraper himself. He seems a very civil fellow.",
+    ]
+
+
+def test_parse_chaptered_text_supports_book_headings_and_editorial_coda(tmp_path: Path) -> None:
+    source = tmp_path / "werther-style.txt"
+    source.write_text(WERTHER_STYLE_TEXT, encoding="utf-8")
+
+    sections = parse_chaptered_text(source, "The Sorrows of Young Werther")
+
+    assert [section.id for section in sections] == ["book-i", "book-ii", "the-editor-to-the-reader"]
+    assert [section.label for section in sections] == ["Book I", "Book II", "Editor"]
+    assert sections[0].title == "Book I"
+    assert sections[0].subtitle == "MAY 4."
+    assert sections[0].body == [
+        "How happy I am that I am gone!",
+        "MAY 10.",
+        "A wonderful serenity has taken possession of my entire soul.",
+    ]
+    assert sections[1].title == "Book II"
+    assert sections[1].subtitle == "OCTOBER 20."
+    assert sections[1].body == ["We arrived here yesterday."]
+    assert sections[2].title == "The Editor to the Reader"
+    assert sections[2].subtitle == ""
+    assert sections[2].body == [
+        "It is a matter of extreme regret that we want original evidence."
     ]
 
 
@@ -268,3 +322,49 @@ Your letter reached me.
     assert (output_dir / "books" / "sample-chaptered" / "chapter-ii.html").exists()
     assert (output_dir / "books" / "sample-letters" / "letter-i.html").exists()
     assert (output_dir / "books" / "sample-letters" / "letter-ii.html").exists()
+
+
+def test_build_library_supports_werther_style_book_sections(tmp_path: Path) -> None:
+    content_root = tmp_path / "library"
+    books_dir = content_root / "books"
+    werther_dir = books_dir / "werther"
+    werther_dir.mkdir(parents=True)
+
+    (content_root / "library.yaml").write_text(
+        """title: Mixed Library
+books_dir: books
+output_dir: dist
+""",
+        encoding="utf-8",
+    )
+    (werther_dir / "book.yaml").write_text(
+        """id: werther
+title: The Sorrows of Young Werther
+author: J.W. von Goethe
+year: \"1774\"
+source_file: source.txt
+source_format: gutenberg-txt
+profile: chaptered
+parser: gutenberg-chapters-v1
+theme: classic-paper
+""",
+        encoding="utf-8",
+    )
+    (werther_dir / "source.txt").write_text(WERTHER_STYLE_TEXT, encoding="utf-8")
+
+    output_dir = build_library(content_root)
+
+    assert (output_dir / "index.html").exists()
+    assert (output_dir / "books" / "werther" / "book-i.html").exists()
+    assert (output_dir / "books" / "werther" / "book-ii.html").exists()
+    assert (output_dir / "books" / "werther" / "the-editor-to-the-reader.html").exists()
+
+    toc_html = (output_dir / "books" / "werther" / "index.html").read_text(encoding="utf-8")
+    assert '<span class="toc-kicker">Book I</span><span class="toc-meta">MAY 4.</span>' in toc_html
+    assert 'Book I</span><span class="toc-title">Book I</span>' not in toc_html
+    assert 'Editor</span><span class="toc-title">The Editor to the Reader</span>' not in toc_html
+    assert '<span class="toc-title">The Editor to the Reader</span>' in toc_html
+
+    book_i_html = (output_dir / "books" / "werther" / "book-i.html").read_text(encoding="utf-8")
+    assert '<h2 class="letter-title">Book I</h2>' in book_i_html
+    assert '<div class="letter-label">Book I</div>' not in book_i_html

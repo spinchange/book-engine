@@ -15,6 +15,7 @@ Both profiles currently support `gutenberg-txt` inputs.
 The `chaptered` parser now handles both of these Gutenberg heading patterns:
 - `CHAPTER I` followed by a title on the next non-blank line
 - `CHAPTER I. Inline title text` with wrapped title lines before the first blank line
+- top-level `BOOK I` / `BOOK II.` divisions, including Werther-style editorial codas like `THE EDITOR TO THE READER.`
 
 ## Local development
 

@@ -96,9 +96,12 @@ def render_book(book: Book, output_dir: Path) -> None:
     toc_items = []
     for sec in book.sections:
         meta_html = f'<span class="toc-meta">{escape(sec.subtitle)}</span>' if sec.subtitle else ''
+        show_kicker = not (sec.label == 'Editor' and sec.title.lower().startswith('the editor'))
+        kicker_html = f'<span class="toc-kicker">{escape(sec.label)}</span>' if show_kicker else ''
+        title_html = '' if sec.title == sec.label else f'<span class="toc-title">{escape(sec.title)}</span>'
         toc_items.append(
-            f'<li><a href="{sec.id}.html"><span class="toc-kicker">{escape(sec.label)}</span>'
-            f'<span class="toc-title">{escape(sec.title)}</span>{meta_html}</a></li>'
+            f'<li><a href="{sec.id}.html">{kicker_html}'
+            f'{title_html}{meta_html}</a></li>'
         )
 
     source_html = f'Source: <a href="{escape(book.config.source_url)}">Project Gutenberg</a>' if book.config.source_url else ''
@@ -120,13 +123,14 @@ def render_book(book: Book, output_dir: Path) -> None:
         next_sec = book.sections[idx + 1] if idx + 1 < len(book.sections) else None
         body_paras = ''.join(f'<p>{escape(p)}</p>' for p in sec.body)
         subtitle_html = f'<p class="letter-subtitle">{escape(sec.subtitle)}</p>' if sec.subtitle else ''
+        label_html = '' if sec.title == sec.label else f'<div class="letter-label">{escape(sec.label)}</div>'
         page_body = f'''
 <header class="header">
   <h1>{escape(book.config.title)}</h1>
   <p>By {escape(book.config.author)} · Sequential reading edition</p>
 </header>
 <main class="container">
-  <div class="letter-label">{escape(sec.label)}</div>
+  {label_html}
   <h2 class="letter-title">{escape(sec.title)}</h2>
   {subtitle_html}
   {_nav(prev_sec, next_sec)}

@@ -63,6 +63,8 @@ Expected source structure:
 - chapter headings like `CHAPTER I`, `CHAPTER II`, or `CHAPTER 3`
 - optional chapter title on the next non-blank line
 - or inline Gutenberg headings like `CHAPTER I. A Stormy Beginning`, including wrapped continuation lines before the first blank line
+- or top-level `BOOK I` / `BOOK II.` divisions when a work is structurally part-based rather than chapter-based
+- optional editorial coda headings like `THE EDITOR TO THE READER.` when they function as the final top-level section
 - body paragraphs separated by blank lines
 
 Output shape:
