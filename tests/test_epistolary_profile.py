@@ -120,6 +120,40 @@ This is a multiline continuation heading.
 """
 
 
+PAMELA_STYLE_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK PAMELA SAMPLE ***
+
+PAMELA, or VIRTUE REWARDED
+
+LETTER I
+
+DEAR FATHER AND MOTHER,
+
+I have great trouble, and some comfort, to acquaint you with.
+
+LETTER II
+
+[In answer to the preceding.]
+
+DEAR PAMELA,
+
+Your letter was indeed a great trouble, and some comfort, to me.
+
+LETTER III
+
+MY DEAR FATHER AND MOTHER,
+
+I write again to assure you of my duty.
+
+LETTER IV
+
+O MY DEAREST FATHER AND MOTHER!
+
+Let me write, and bewail my miserable hard fate.
+
+*** END OF THE PROJECT GUTENBERG EBOOK PAMELA SAMPLE ***
+"""
+
+
 def test_extract_gutenberg_main_text_accepts_numeric_ebook_markers() -> None:
     main = extract_gutenberg_main_text(HUMPHRY_CLINKER_TEXT, "The Expedition of Humphry Clinker")
 
@@ -180,6 +214,25 @@ def test_parse_gutenberg_epistolary_skips_split_summary_and_supports_additional_
     assert sections[3].title == "MR. LOVELACE [IN CONTINUATION.]"
     assert sections[3].subtitle == "THURSDAY, JULY 20."
     assert sections[3].body == ["This is a multiline continuation heading."]
+
+
+def test_parse_gutenberg_epistolary_supports_pamela_style_letter_headings(tmp_path: Path) -> None:
+    source = tmp_path / "pamela-sample.txt"
+    source.write_text(PAMELA_STYLE_TEXT, encoding="utf-8")
+
+    sections = parse_gutenberg_epistolary(source, "Pamela Sample")
+
+    assert [section.id for section in sections] == ["letter-i", "letter-ii", "letter-iii", "letter-iv"]
+    assert sections[0].title == "DEAR FATHER AND MOTHER,"
+    assert sections[0].subtitle == ""
+    assert sections[0].body == ["I have great trouble, and some comfort, to acquaint you with."]
+    assert sections[1].title == "[In answer to the preceding.]"
+    assert sections[1].subtitle == "DEAR PAMELA,"
+    assert sections[1].body == ["Your letter was indeed a great trouble, and some comfort, to me."]
+    assert sections[2].title == "MY DEAR FATHER AND MOTHER,"
+    assert sections[2].body == ["I write again to assure you of my duty."]
+    assert sections[3].title == "O MY DEAREST FATHER AND MOTHER!"
+    assert sections[3].body == ["Let me write, and bewail my miserable hard fate."]
 
 
 def test_build_library_supports_humphry_clinker_style_epistolary_book(tmp_path: Path) -> None:
@@ -253,3 +306,41 @@ theme: classic-paper
     assert (output_dir / "books" / "sample-letters" / "letter-ii.html").exists()
     assert (output_dir / "books" / "clarissa-sample" / "letter-i.html").exists()
     assert (output_dir / "books" / "clarissa-sample" / "letter-ii.html").exists()
+
+
+def test_build_library_supports_pamela_style_epistolary_book(tmp_path: Path) -> None:
+    content_root = tmp_path / "library"
+    books_dir = content_root / "books"
+    pamela_dir = books_dir / "pamela-sample"
+    pamela_dir.mkdir(parents=True)
+
+    (content_root / "library.yaml").write_text(
+        """title: Pamela Library
+books_dir: books
+output_dir: dist
+""",
+        encoding="utf-8",
+    )
+    (pamela_dir / "book.yaml").write_text(
+        """id: pamela-sample
+title: Pamela Sample
+author: Samuel Richardson
+year: \"1740\"
+source_file: source.txt
+source_format: gutenberg-txt
+profile: epistolary
+parser: gutenberg-letters-v1
+theme: classic-paper
+""",
+        encoding="utf-8",
+    )
+    (pamela_dir / "source.txt").write_text(PAMELA_STYLE_TEXT, encoding="utf-8")
+
+    output_dir = build_library(content_root)
+
+    assert (output_dir / "index.html").exists()
+    assert (output_dir / "books" / "pamela-sample" / "index.html").exists()
+    assert (output_dir / "books" / "pamela-sample" / "letter-i.html").exists()
+    assert (output_dir / "books" / "pamela-sample" / "letter-ii.html").exists()
+    assert (output_dir / "books" / "pamela-sample" / "letter-iii.html").exists()
+    assert (output_dir / "books" / "pamela-sample" / "letter-iv.html").exists()

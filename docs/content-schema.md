@@ -40,8 +40,11 @@ parser: gutenberg-letters-v1
 
 Expected source structure:
 - Project Gutenberg header/footer markers
-- section headings as Roman numerals (`I`, `II`, ...)
-- a following italicized sender/recipient line such as `_From A. to B._`
+- one of these heading grammars:
+  - section headings as Roman numerals (`I`, `II`, ...`) with a following italicized sender/recipient line such as `_From A. to B._`
+  - direct `To ...` letter headers followed by the salutation/body
+  - standalone `LETTER I`, `LETTER II`, etc. followed by an uppercase correspondent line containing ` TO `
+  - standalone `LETTER I`, `LETTER II`, etc. followed by an uppercase salutation line such as `DEAR FATHER AND MOTHER,`, optionally with a bracketed continuation note like `[In answer to the preceding.]`
 - optional short dateline paragraph used as subtitle
 
 Output shape:

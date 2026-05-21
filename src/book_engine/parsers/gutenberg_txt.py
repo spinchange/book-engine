@@ -85,6 +85,22 @@ def _looks_like_date_line(line: str) -> bool:
 
 
 
+def _looks_like_salutation_line(line: str) -> bool:
+    header = line.strip()
+    upper = header.upper()
+    if not header.endswith((",", "!")):
+        return False
+    salutation_prefixes = (
+        "DEAR ",
+        "MY DEAR ",
+        "MY DEAREST ",
+        "O MY DEAR ",
+        "O MY DEAREST ",
+    )
+    return _is_uppercaseish(header) and upper.startswith(salutation_prefixes)
+
+
+
 def _looks_like_correspondent_header(lines: list[str]) -> bool:
     if not lines:
         return False
@@ -109,6 +125,15 @@ def _looks_like_correspondent_header(lines: list[str]) -> bool:
         return True
 
     if _is_uppercaseish(first) and _looks_like_date_line(second):
+        return True
+
+    if _looks_like_salutation_line(first):
+        return True
+
+    if first_upper.startswith("[IN ") and _looks_like_salutation_line(second):
+        return True
+
+    if first_upper.startswith("[ENCLOSED ") and _looks_like_salutation_line(second):
         return True
 
     third = lines[2].strip() if len(lines) > 2 else ""
@@ -165,6 +190,10 @@ def _split_letter_heading_paragraphs(paras: list[str], fallback_label: str) -> t
     if len(paras) > body_start and _looks_like_date_line(paras[body_start]):
         subtitle = paras[body_start]
         body_start += 1
+    elif title_text.upper().startswith("[IN ") or title_text.upper().startswith("[ENCLOSED "):
+        if len(paras) > body_start and _looks_like_salutation_line(paras[body_start]):
+            subtitle = paras[body_start]
+            body_start += 1
 
     return title_text, subtitle, paras[body_start:]
 

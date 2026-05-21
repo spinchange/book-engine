@@ -12,6 +12,12 @@ It is built around a clean split between:
 - `chaptered` — one HTML page per chapter with a generated table of contents
 
 Both profiles currently support `gutenberg-txt` inputs.
+The `epistolary` parser now handles these Gutenberg heading patterns:
+- Roman-numeral sections with italic `_From ... to ..._` correspondent lines
+- direct `To ...` letter headers
+- Clarissa-style `LETTER I` headings followed by an uppercase correspondent line containing ` TO `
+- Pamela-style `LETTER I` headings followed by an uppercase salutation line, optionally after a bracketed continuation note
+
 The `chaptered` parser now handles both of these Gutenberg heading patterns:
 - `CHAPTER I` followed by a title on the next non-blank line
 - `CHAPTER I. Inline title text` with wrapped title lines before the first blank line
