@@ -187,6 +187,63 @@ Let me write, and bewail my miserable hard fate.
 """
 
 
+EVELINA_STYLE_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK EVELINA SAMPLE ***
+
+THE HISTORY OF EVELINA
+
+LETTER I
+
+LADY HOWARD TO THE REV. MR. VILLARS Howard Grove, Kent.
+
+Can any thing, my good Sir, be more painful to a friendly mind?
+
+LETTER II
+
+EVELINA IN CONTINUATION Queen Ann Street, April 5, Tuesday Morning.
+
+I have a vast deal to say, and shall give all this morning to my pen.
+
+LETTER III [Written some months after the last]
+
+EVELINA TO THE REV. MR. VILLARS Queen Ann Street, London, Saturday,
+April 2.
+
+This moment arrived.
+
+LETTER IV. [Inclosed in the preceding Letter.]
+
+MR. VILLARS TO LADY HOWARD March 18. Dear Madam,
+
+This letter will be delivered to you by my child.
+
+*** END OF THE PROJECT GUTENBERG EBOOK EVELINA SAMPLE ***
+"""
+
+
+EVELINA_CONTINUATION_EDGE_CASES_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK EVELINA EDGE SAMPLE ***
+
+THE HISTORY OF EVELINA
+
+LETTER I
+
+EVELINA IN CONTINUATION I HAVE a volume to write of the adventures of yesterday.
+
+Miss Mirvan looked so much astonished that I was ready to laugh myself.
+
+LETTER II
+
+EVELINA IN CONTINUATION
+
+June 10th
+THIS morning Mr. Smith called,
+on purpose, he said, to offer me a ticket.
+
+Obvious as they must surely have been to any other person.
+
+*** END OF THE PROJECT GUTENBERG EBOOK EVELINA EDGE SAMPLE ***
+"""
+
+
 PORTUGUESE_NUN_STYLE_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK THE LETTERS OF A PORTUGUESE NUN ***
 
 CONTENTS
@@ -325,6 +382,44 @@ def test_parse_gutenberg_epistolary_supports_pamela_style_letter_headings(tmp_pa
     assert sections[3].body == ["Let me write, and bewail my miserable hard fate."]
 
 
+def test_parse_gutenberg_epistolary_supports_evelina_style_mixed_case_headers(tmp_path: Path) -> None:
+    source = tmp_path / "evelina-sample.txt"
+    source.write_text(EVELINA_STYLE_TEXT, encoding="utf-8")
+
+    sections = parse_gutenberg_epistolary(source, "Evelina Sample")
+
+    assert [section.id for section in sections] == ["letter-i", "letter-ii", "letter-iii", "letter-iv"]
+    assert sections[0].title == "LADY HOWARD TO THE REV. MR. VILLARS Howard Grove, Kent."
+    assert sections[0].body == ["Can any thing, my good Sir, be more painful to a friendly mind?"]
+    assert sections[1].title == "EVELINA IN CONTINUATION Queen Ann Street, April 5, Tuesday Morning."
+    assert sections[1].body == ["I have a vast deal to say, and shall give all this morning to my pen."]
+    assert sections[2].title == "EVELINA TO THE REV. MR. VILLARS Queen Ann Street, London, Saturday, April 2. [Written some months after the last]"
+    assert sections[2].body == ["This moment arrived."]
+    assert sections[3].title == "MR. VILLARS TO LADY HOWARD March 18. Dear Madam, [Inclosed in the preceding Letter.]"
+    assert sections[3].body == ["This letter will be delivered to you by my child."]
+
+
+def test_parse_gutenberg_epistolary_handles_evelina_continuation_body_edge_cases(tmp_path: Path) -> None:
+    source = tmp_path / "evelina-edge-sample.txt"
+    source.write_text(EVELINA_CONTINUATION_EDGE_CASES_TEXT, encoding="utf-8")
+
+    sections = parse_gutenberg_epistolary(source, "Evelina Edge Sample")
+
+    assert [section.id for section in sections] == ["letter-i", "letter-ii"]
+    assert sections[0].title == "EVELINA IN CONTINUATION"
+    assert sections[0].subtitle == ""
+    assert sections[0].body == [
+        "I HAVE a volume to write of the adventures of yesterday.",
+        "Miss Mirvan looked so much astonished that I was ready to laugh myself.",
+    ]
+    assert sections[1].title == "EVELINA IN CONTINUATION"
+    assert sections[1].subtitle == "June 10th"
+    assert sections[1].body == [
+        "THIS morning Mr. Smith called, on purpose, he said, to offer me a ticket.",
+        "Obvious as they must surely have been to any other person.",
+    ]
+
+
 def test_parse_gutenberg_epistolary_skips_contents_false_positives_and_supports_global_correspondent_titles(tmp_path: Path) -> None:
     source = tmp_path / "portuguese-nun-sample.txt"
     source.write_text(PORTUGUESE_NUN_STYLE_TEXT, encoding="utf-8")
@@ -448,6 +543,44 @@ theme: classic-paper
     assert (output_dir / "books" / "pamela-sample" / "letter-ii.html").exists()
     assert (output_dir / "books" / "pamela-sample" / "letter-iii.html").exists()
     assert (output_dir / "books" / "pamela-sample" / "letter-iv.html").exists()
+
+
+def test_build_library_supports_evelina_style_epistolary_book(tmp_path: Path) -> None:
+    content_root = tmp_path / "library"
+    books_dir = content_root / "books"
+    evelina_dir = books_dir / "evelina-sample"
+    evelina_dir.mkdir(parents=True)
+
+    (content_root / "library.yaml").write_text(
+        """title: Evelina Library
+books_dir: books
+output_dir: dist
+""",
+        encoding="utf-8",
+    )
+    (evelina_dir / "book.yaml").write_text(
+        """id: evelina-sample
+title: Evelina Sample
+author: Fanny Burney
+year: \"1778\"
+source_file: source.txt
+source_format: gutenberg-txt
+profile: epistolary
+parser: gutenberg-letters-v1
+theme: classic-paper
+""",
+        encoding="utf-8",
+    )
+    (evelina_dir / "source.txt").write_text(EVELINA_STYLE_TEXT, encoding="utf-8")
+
+    output_dir = build_library(content_root)
+
+    assert (output_dir / "index.html").exists()
+    assert (output_dir / "books" / "evelina-sample" / "index.html").exists()
+    assert (output_dir / "books" / "evelina-sample" / "letter-i.html").exists()
+    assert (output_dir / "books" / "evelina-sample" / "letter-ii.html").exists()
+    assert (output_dir / "books" / "evelina-sample" / "letter-iii.html").exists()
+    assert (output_dir / "books" / "evelina-sample" / "letter-iv.html").exists()
 
 
 def test_build_library_supports_plain_text_epistolary_book(tmp_path: Path) -> None:
