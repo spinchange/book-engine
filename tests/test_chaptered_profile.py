@@ -148,6 +148,33 @@ It is a matter of extreme regret that we want original evidence.
 *** END OF THE PROJECT GUTENBERG EBOOK 2527 ***
 """
 
+PART_STYLE_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK NOTES FROM THE UNDERGROUND ***
+
+PART I
+Underground
+
+I
+
+I am a sick man.... I am a spiteful man.
+
+II
+
+I want now to tell you, gentlemen, whether you care to hear it or not.
+
+PART II
+A Propos of the Wet Snow
+
+When from dark error's subjugation
+My words of passionate exhortation
+    Had wrenched thy fainting spirit free;
+
+I
+
+At that time I was only twenty-four.
+
+*** END OF THE PROJECT GUTENBERG EBOOK NOTES FROM THE UNDERGROUND ***
+"""
+
 
 def test_parse_chaptered_text_splits_chapters_and_paragraphs(tmp_path: Path) -> None:
     source = tmp_path / "sample.txt"
@@ -245,6 +272,31 @@ def test_parse_chaptered_text_supports_book_headings_and_editorial_coda(tmp_path
     assert sections[2].subtitle == ""
     assert sections[2].body == [
         "It is a matter of extreme regret that we want original evidence."
+    ]
+
+
+def test_parse_chaptered_text_supports_part_headings_with_titles(tmp_path: Path) -> None:
+    source = tmp_path / "notes-from-underground.txt"
+    source.write_text(PART_STYLE_TEXT, encoding="utf-8")
+
+    sections = parse_chaptered_text(source, "Notes from the Underground")
+
+    assert [section.id for section in sections] == ["part-i", "part-ii"]
+    assert [section.label for section in sections] == ["Part I", "Part II"]
+    assert sections[0].title == "Underground"
+    assert sections[0].subtitle == ""
+    assert sections[0].body == [
+        "I",
+        "I am a sick man.... I am a spiteful man.",
+        "II",
+        "I want now to tell you, gentlemen, whether you care to hear it or not.",
+    ]
+    assert sections[1].title == "A Propos of the Wet Snow"
+    assert sections[1].subtitle == ""
+    assert sections[1].body == [
+        "When from dark error's subjugation My words of passionate exhortation Had wrenched thy fainting spirit free;",
+        "I",
+        "At that time I was only twenty-four.",
     ]
 
 

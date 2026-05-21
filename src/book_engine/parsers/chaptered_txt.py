@@ -55,7 +55,7 @@ def _paragraphize(raw_body: str) -> list[str]:
 def _parse_heading(line: str) -> tuple[str, str, str] | None:
     stripped = line.strip()
 
-    for prefix, kind in (("CHAPTER ", "chapter"), ("BOOK ", "book")):
+    for prefix, kind in (("CHAPTER ", "chapter"), ("BOOK ", "book"), ("PART ", "part")):
         if not stripped.startswith(prefix):
             continue
 
@@ -180,10 +180,10 @@ def parse_chaptered_text(source_path: Path, title: str) -> list[Section]:
                 title_parts.append(chunk_lines.pop(0).strip())
             while chunk_lines and not chunk_lines[0].strip():
                 chunk_lines.pop(0)
-        elif kind == "chapter":
+        elif kind in {"chapter", "part"}:
             while chunk_lines and not chunk_lines[0].strip():
                 chunk_lines.pop(0)
-            if label in toc_titles:
+            if kind == "chapter" and label in toc_titles:
                 title_parts.append(toc_titles[label])
             else:
                 sparse_wrapped_title = _consume_sparse_wrapped_title_block(chunk_lines)
@@ -213,6 +213,10 @@ def parse_chaptered_text(source_path: Path, title: str) -> list[Section]:
             if body and _looks_like_short_date_heading(body[0].upper()):
                 subtitle = body[0]
                 body = body[1:]
+        elif kind == "part":
+            section_id = label.lower().replace(" ", "-")
+            readable_label = f"Part {label.split(maxsplit=1)[1]}"
+            title_line = re.sub(r"\s+", " ", " ".join(title_parts)).strip() or readable_label
         else:
             section_id = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")
             readable_label = "Editor"
