@@ -47,7 +47,9 @@ def _looks_like_roman_epistolary_heading(lines: list[str], index: int) -> bool:
     if not re.fullmatch(r"[IVXLCDM]+", lines[index].strip()):
         return False
     tail = [ln.strip() for ln in lines[index + 1 : index + 6] if ln.strip()]
-    return bool(tail and tail[0].startswith("_"))
+    if tail and tail[0].startswith("_"):
+        return True
+    return len(tail) >= 2 and _looks_like_date_line(tail[0]) and bool(_split_italic_salutation_paragraph(tail[1]))
 
 
 def _looks_like_to_line_heading(lines: list[str], index: int) -> bool:
@@ -112,6 +114,18 @@ def _looks_like_salutation_line(line: str) -> bool:
         "O MY DEAREST ",
     )
     return _is_uppercaseish(header) and upper.startswith(salutation_prefixes)
+
+
+ITALIC_SALUTATION_WITH_BODY_RE = re.compile(r"^_(.+?:)_\s*(.*)$")
+
+
+def _split_italic_salutation_paragraph(paragraph: str) -> tuple[str, str] | None:
+    match = ITALIC_SALUTATION_WITH_BODY_RE.match(paragraph.strip())
+    if not match:
+        return None
+    title = match.group(1).strip()
+    remainder = match.group(2).strip()
+    return title, remainder
 
 
 
@@ -373,12 +387,25 @@ def parse_gutenberg_epistolary(
             if paras and paras[0].startswith("_") and paras[0].endswith("_"):
                 title_text = paras[0].strip("_")
                 body = paras[1:]
+                subtitle = body[0] if body and len(body[0]) < 80 else ""
+                if subtitle:
+                    body = body[1:]
+            elif len(paras) >= 2 and _looks_like_date_line(paras[0]):
+                salutation_split = _split_italic_salutation_paragraph(paras[1])
+                if salutation_split:
+                    title_text, inline_body = salutation_split
+                    subtitle = paras[0]
+                    body = ([inline_body] if inline_body else []) + paras[2:]
+                else:
+                    title_text = "Conclusion"
+                    subtitle = paras[0] if paras and len(paras[0]) < 80 else ""
+                    body = paras[1:] if subtitle else paras
             else:
                 title_text = "Conclusion"
                 body = paras
-            subtitle = body[0] if body and len(body[0]) < 80 else ""
-            if subtitle:
-                body = body[1:]
+                subtitle = body[0] if body and len(body[0]) < 80 else ""
+                if subtitle:
+                    body = body[1:]
             sec_id = "conclusion" if label == "CONCLUSION" else f"letter-{label.lower()}"
             sec_label = label if label == "CONCLUSION" else f"Letter {label}"
         elif heading_mode == "letter-heading":

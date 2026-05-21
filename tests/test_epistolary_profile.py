@@ -187,6 +187,26 @@ Let me write, and bewail my miserable hard fate.
 """
 
 
+SELF_MADE_MERCHANT_STYLE_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK LETTERS FROM A SELF-MADE MERCHANT TO HIS SON ***
+
+LETTERS _from a_ SELF-MADE MERCHANT _to his_ SON
+
+I
+
+CHICAGO, October 1, 189-
+
+_Dear Pierrepont:_ Your Ma got back safe this morning.
+
+II
+
+CHICAGO, May 4, 189-
+
+_Dear Pierrepont:_ The cashier has just handed me your expense account.
+
+*** END OF THE PROJECT GUTENBERG EBOOK LETTERS FROM A SELF-MADE MERCHANT TO HIS SON ***
+"""
+
+
 EVELINA_STYLE_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK EVELINA SAMPLE ***
 
 THE HISTORY OF EVELINA
@@ -382,6 +402,22 @@ def test_parse_gutenberg_epistolary_supports_pamela_style_letter_headings(tmp_pa
     assert sections[3].body == ["Let me write, and bewail my miserable hard fate."]
 
 
+def test_parse_gutenberg_epistolary_supports_self_made_merchant_style_roman_letters(tmp_path: Path) -> None:
+    source = tmp_path / "self-made-merchant-sample.txt"
+    source.write_text(SELF_MADE_MERCHANT_STYLE_TEXT, encoding="utf-8")
+
+    sections = parse_gutenberg_epistolary(source, "Letters from a Self-Made Merchant to His Son")
+
+    assert [section.id for section in sections] == ["letter-i", "letter-ii"]
+    assert [section.label for section in sections] == ["Letter I", "Letter II"]
+    assert sections[0].title == "Dear Pierrepont:"
+    assert sections[0].subtitle == "CHICAGO, October 1, 189-"
+    assert sections[0].body == ["Your Ma got back safe this morning."]
+    assert sections[1].title == "Dear Pierrepont:"
+    assert sections[1].subtitle == "CHICAGO, May 4, 189-"
+    assert sections[1].body == ["The cashier has just handed me your expense account."]
+
+
 def test_parse_gutenberg_epistolary_supports_evelina_style_mixed_case_headers(tmp_path: Path) -> None:
     source = tmp_path / "evelina-sample.txt"
     source.write_text(EVELINA_STYLE_TEXT, encoding="utf-8")
@@ -543,6 +579,42 @@ theme: classic-paper
     assert (output_dir / "books" / "pamela-sample" / "letter-ii.html").exists()
     assert (output_dir / "books" / "pamela-sample" / "letter-iii.html").exists()
     assert (output_dir / "books" / "pamela-sample" / "letter-iv.html").exists()
+
+
+def test_build_library_supports_self_made_merchant_style_epistolary_book(tmp_path: Path) -> None:
+    content_root = tmp_path / "library"
+    books_dir = content_root / "books"
+    merchant_dir = books_dir / "self-made-merchant-sample"
+    merchant_dir.mkdir(parents=True)
+
+    (content_root / "library.yaml").write_text(
+        """title: Self-Made Merchant Library
+books_dir: books
+output_dir: dist
+""",
+        encoding="utf-8",
+    )
+    (merchant_dir / "book.yaml").write_text(
+        """id: self-made-merchant-sample
+title: Letters from a Self-Made Merchant to His Son
+author: George Horace Lorimer
+year: \"1902\"
+source_file: source.txt
+source_format: gutenberg-txt
+profile: epistolary
+parser: gutenberg-letters-v1
+theme: classic-paper
+""",
+        encoding="utf-8",
+    )
+    (merchant_dir / "source.txt").write_text(SELF_MADE_MERCHANT_STYLE_TEXT, encoding="utf-8")
+
+    output_dir = build_library(content_root)
+
+    assert (output_dir / "index.html").exists()
+    assert (output_dir / "books" / "self-made-merchant-sample" / "index.html").exists()
+    assert (output_dir / "books" / "self-made-merchant-sample" / "letter-i.html").exists()
+    assert (output_dir / "books" / "self-made-merchant-sample" / "letter-ii.html").exists()
 
 
 def test_build_library_supports_evelina_style_epistolary_book(tmp_path: Path) -> None:
