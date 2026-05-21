@@ -70,7 +70,7 @@ def _nav(prev_section: Section | None, next_section: Section | None) -> str:
 
 def render_library_index(library: dict, books: list[Book], output_dir: Path) -> None:
     cards = []
-    for book in books:
+    for book in sorted(books, key=lambda book: (book.config.title.casefold(), book.config.author.casefold(), book.config.id)):
         description = book.config.description or "A generated reading edition."
         cards.append(
             f'<article class="book-card"><h3><a href="books/{book.output_slug}/index.html">{escape(book.config.title)}</a></h3>'

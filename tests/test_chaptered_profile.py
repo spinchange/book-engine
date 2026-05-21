@@ -420,3 +420,66 @@ theme: classic-paper
     book_i_html = (output_dir / "books" / "werther" / "book-i.html").read_text(encoding="utf-8")
     assert '<h2 class="letter-title">Book I</h2>' in book_i_html
     assert '<div class="letter-label">Book I</div>' not in book_i_html
+
+
+def test_build_library_index_orders_books_alphabetically_by_title(tmp_path: Path) -> None:
+    content_root = tmp_path / "library"
+    books_dir = content_root / "books"
+    zeta_title_dir = books_dir / "a-book"
+    alpha_title_dir = books_dir / "z-book"
+    zeta_title_dir.mkdir(parents=True)
+    alpha_title_dir.mkdir(parents=True)
+
+    (content_root / "library.yaml").write_text(
+        """title: Mixed Library
+books_dir: books
+output_dir: dist
+""",
+        encoding="utf-8",
+    )
+    (zeta_title_dir / "book.yaml").write_text(
+        """id: a-book
+title: Zeta Letters
+author: Test Author
+year: \"1902\"
+source_file: source.txt
+source_format: gutenberg-txt
+profile: epistolary
+parser: gutenberg-letters-v1
+theme: classic-paper
+""",
+        encoding="utf-8",
+    )
+    (alpha_title_dir / "book.yaml").write_text(
+        """id: z-book
+title: Alpha Letters
+author: Test Author
+year: \"1901\"
+source_file: source.txt
+source_format: gutenberg-txt
+profile: epistolary
+parser: gutenberg-letters-v1
+theme: classic-paper
+""",
+        encoding="utf-8",
+    )
+    letter_source = """*** START OF THE PROJECT GUTENBERG EBOOK SAMPLE LETTERS ***
+
+I
+_From A. to B._
+
+Bath, Monday.
+
+My dear friend,
+
+I write to you at once.
+
+*** END OF THE PROJECT GUTENBERG EBOOK SAMPLE LETTERS ***
+"""
+    (zeta_title_dir / "source.txt").write_text(letter_source, encoding="utf-8")
+    (alpha_title_dir / "source.txt").write_text(letter_source, encoding="utf-8")
+
+    output_dir = build_library(content_root)
+
+    index_html = (output_dir / "index.html").read_text(encoding="utf-8")
+    assert index_html.index("Alpha Letters") < index_html.index("Zeta Letters")
