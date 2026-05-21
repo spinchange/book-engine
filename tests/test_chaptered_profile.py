@@ -36,6 +36,34 @@ Another Turn
 This is chapter two.
 """
 
+TITLE_CASE_WITH_TITLE_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK SAMPLE TITLE CASE BOOK ***
+
+Chapter 1
+The Beginning
+
+Body paragraph.
+
+Chapter 2
+The Return
+
+Closing body.
+
+*** END OF THE PROJECT GUTENBERG EBOOK SAMPLE TITLE CASE BOOK ***
+"""
+
+SHORT_BODY_CHAPTER_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK SHORT BODY BOOK ***
+
+CHAPTER I
+
+At last we began.
+
+CHAPTER II
+
+Done.
+
+*** END OF THE PROJECT GUTENBERG EBOOK SHORT BODY BOOK ***
+"""
+
 INLINE_HEADING_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK THE ADVENTURES OF TOM SAWYER ***
 
 CHAPTER I. Y-o-u-u Tom—Aunt Polly Decides Upon her Duty—Tom Practices
@@ -209,6 +237,35 @@ Oui, monsieur, je publierai le manuscrit.
 *** END OF THE PROJECT GUTENBERG EBOOK ADOLPHE ***
 """
 
+FRANKENSTEIN_MIXED_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK FRANKENSTEIN; OR, THE MODERN PROMETHEUS ***
+
+CONTENTS
+
+Letter 1
+Chapter 1
+Chapter 2
+
+Letter 1
+
+_To Mrs. Saville, England._
+
+St. Petersburgh, Dec. 11th, 17—.
+
+You will rejoice to hear that no disaster has accompanied the commencement
+of an enterprise which you have regarded with such evil forebodings.
+
+Chapter 1
+
+I am by birth a Genevese, and my family is one of the most distinguished of
+that republic.
+
+Chapter 2
+
+From my infancy I was imbued with high hopes and a lofty ambition.
+
+*** END OF THE PROJECT GUTENBERG EBOOK FRANKENSTEIN; OR, THE MODERN PROMETHEUS ***
+"""
+
 
 def test_parse_chaptered_text_splits_chapters_and_paragraphs(tmp_path: Path) -> None:
     source = tmp_path / "sample.txt"
@@ -235,6 +292,32 @@ def test_parse_chaptered_text_supports_plain_text_sources(tmp_path: Path) -> Non
     assert sections[0].body == ["This is the first paragraph.", "This is the second paragraph."]
     assert sections[1].title == "Another Turn"
     assert sections[1].body == ["This is chapter two."]
+
+
+def test_parse_chaptered_text_supports_title_case_numeric_headings_with_following_titles(tmp_path: Path) -> None:
+    source = tmp_path / "title-case-with-title.txt"
+    source.write_text(TITLE_CASE_WITH_TITLE_TEXT, encoding="utf-8")
+
+    sections = parse_chaptered_text(source, "Sample Title Case Book")
+
+    assert [section.id for section in sections] == ["chapter-1", "chapter-2"]
+    assert sections[0].title == "The Beginning"
+    assert sections[0].body == ["Body paragraph."]
+    assert sections[1].title == "The Return"
+    assert sections[1].body == ["Closing body."]
+
+
+def test_parse_chaptered_text_preserves_short_opening_body_paragraphs(tmp_path: Path) -> None:
+    source = tmp_path / "short-body.txt"
+    source.write_text(SHORT_BODY_CHAPTER_TEXT, encoding="utf-8")
+
+    sections = parse_chaptered_text(source, "Short Body Book")
+
+    assert [section.id for section in sections] == ["chapter-i", "chapter-ii"]
+    assert sections[0].title == "Chapter I"
+    assert sections[0].body == ["At last we began."]
+    assert sections[1].title == "Chapter II"
+    assert sections[1].body == ["Done."]
 
 
 def test_parse_chaptered_text_supports_inline_gutenberg_chapter_headings(tmp_path: Path) -> None:
@@ -372,6 +455,29 @@ def test_parse_chaptered_text_supports_french_chapter_and_appendix_headings(tmp_
     assert sections[2].body == ["Je vous renvoie, monsieur, le manuscrit."]
     assert sections[3].title == "Réponse"
     assert sections[3].body == ["Oui, monsieur, je publierai le manuscrit."]
+
+
+def test_parse_chaptered_text_supports_frankenstein_letter_and_title_case_chapter_headings(tmp_path: Path) -> None:
+    source = tmp_path / "frankenstein-sample.txt"
+    source.write_text(FRANKENSTEIN_MIXED_TEXT, encoding="utf-8")
+
+    sections = parse_chaptered_text(source, "Frankenstein; or, the modern prometheus")
+
+    assert [section.id for section in sections] == ["letter-1", "chapter-1", "chapter-2"]
+    assert [section.label for section in sections] == ["Letter 1", "Chapter 1", "Chapter 2"]
+    assert sections[0].title == "To Mrs. Saville, England."
+    assert sections[0].subtitle == "St. Petersburgh, Dec. 11th, 17—."
+    assert sections[0].body == [
+        "You will rejoice to hear that no disaster has accompanied the commencement of an enterprise which you have regarded with such evil forebodings."
+    ]
+    assert sections[1].title == "Chapter 1"
+    assert sections[1].body == [
+        "I am by birth a Genevese, and my family is one of the most distinguished of that republic."
+    ]
+    assert sections[2].title == "Chapter 2"
+    assert sections[2].body == [
+        "From my infancy I was imbued with high hopes and a lofty ambition."
+    ]
 
 
 def test_build_library_supports_chaptered_and_epistolary_books(tmp_path: Path) -> None:
@@ -530,6 +636,45 @@ theme: classic-paper
     book_i_html = (output_dir / "books" / "werther" / "book-i.html").read_text(encoding="utf-8")
     assert '<h2 class="letter-title">Book I</h2>' in book_i_html
     assert '<div class="letter-label">Book I</div>' not in book_i_html
+
+
+def test_build_library_supports_frankenstein_style_mixed_letter_and_chapter_sections(tmp_path: Path) -> None:
+    content_root = tmp_path / "library"
+    books_dir = content_root / "books"
+    frankenstein_dir = books_dir / "frankenstein"
+    frankenstein_dir.mkdir(parents=True)
+
+    (content_root / "library.yaml").write_text(
+        """title: Mixed Library
+books_dir: books
+output_dir: dist
+""",
+        encoding="utf-8",
+    )
+    (frankenstein_dir / "book.yaml").write_text(
+        """id: frankenstein
+title: Frankenstein; or, the modern prometheus
+author: Mary Wollstonecraft Shelley
+year: \"1818\"
+source_file: source.txt
+source_format: gutenberg-txt
+profile: chaptered
+parser: gutenberg-chapters-v1
+theme: classic-paper
+""",
+        encoding="utf-8",
+    )
+    (frankenstein_dir / "source.txt").write_text(FRANKENSTEIN_MIXED_TEXT, encoding="utf-8")
+
+    output_dir = build_library(content_root)
+
+    assert (output_dir / "index.html").exists()
+    assert (output_dir / "books" / "frankenstein" / "letter-1.html").exists()
+    assert (output_dir / "books" / "frankenstein" / "chapter-1.html").exists()
+    assert (output_dir / "books" / "frankenstein" / "chapter-2.html").exists()
+
+    toc_html = (output_dir / "books" / "frankenstein" / "index.html").read_text(encoding="utf-8")
+    assert '<span class="toc-kicker">Letter 1</span><span class="toc-title">To Mrs. Saville, England.</span><span class="toc-meta">St. Petersburgh, Dec. 11th, 17—.</span>' in toc_html
 
 
 def test_build_library_index_orders_books_alphabetically_by_title(tmp_path: Path) -> None:
