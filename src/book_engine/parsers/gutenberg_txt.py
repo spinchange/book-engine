@@ -42,6 +42,8 @@ def _looks_like_to_line_heading(lines: list[str], index: int) -> bool:
     heading = lines[index].strip()
     if not re.fullmatch(r"To\s+.+\.", heading):
         return False
+    if len(heading) < 4 or not heading[3].isupper():
+        return False
     tail = [ln.strip() for ln in lines[index + 1 : index + 6] if ln.strip()]
     return bool(tail)
 
@@ -101,6 +103,32 @@ def _looks_like_salutation_line(line: str) -> bool:
 
 
 
+def _normalize_global_correspondent_title(text: str) -> str:
+    if not text.isupper():
+        return text
+    normalized = text.title()
+    for token in (" A ", " An ", " And ", " Of ", " The ", " To "):
+        normalized = normalized.replace(token, token.lower())
+    return normalized
+
+
+
+def _extract_global_correspondent_title(lines: list[str], index: int) -> str | None:
+    previous_nonblank = [line.strip() for line in lines[max(0, index - 20) : index] if line.strip()]
+    if not previous_nonblank:
+        return None
+
+    last = previous_nonblank[-1]
+    if len(previous_nonblank) >= 2 and previous_nonblank[-2].upper() == "FROM" and " TO " in last.upper():
+        return _normalize_global_correspondent_title(f"FROM {last}")
+
+    if last.upper().startswith("FROM ") and " TO " in last.upper():
+        return _normalize_global_correspondent_title(last)
+
+    return None
+
+
+
 def _looks_like_correspondent_header(lines: list[str]) -> bool:
     if not lines:
         return False
@@ -108,7 +136,7 @@ def _looks_like_correspondent_header(lines: list[str]) -> bool:
     first = lines[0].strip()
     first_upper = first.upper()
     if (
-        first_upper.startswith("TO ")
+        (first_upper.startswith("TO ") and len(first) > 3 and first[3].isupper())
         or first_upper.startswith("FROM ")
         or ((_is_uppercaseish(first) and " TO " in first_upper))
         or ((_is_uppercaseish(first) and " FROM " in first_upper))
@@ -152,7 +180,7 @@ def _looks_like_letter_heading(lines: list[str], index: int) -> bool:
         return False
 
     tail = [ln.strip() for ln in lines[index + 1 : index + 6] if ln.strip()]
-    return _looks_like_correspondent_header(tail)
+    return _looks_like_correspondent_header(tail) or _extract_global_correspondent_title(lines, index) is not None
 
 
 def _find_letter_heading_start(lines: list[str]) -> int | None:
@@ -173,9 +201,14 @@ def _find_letter_heading_start(lines: list[str]) -> int | None:
 
 
 
-def _split_letter_heading_paragraphs(paras: list[str], fallback_label: str) -> tuple[str, str, list[str]]:
+def _split_letter_heading_paragraphs(
+    paras: list[str], fallback_label: str, global_title: str | None = None
+) -> tuple[str, str, list[str]]:
     if not paras:
-        return f"Letter {fallback_label}", "", []
+        return global_title or f"Letter {fallback_label}", "", []
+
+    if global_title and not _looks_like_correspondent_header(paras[:3]):
+        return global_title, "", paras
 
     title_text = paras[0]
     body_start = 1
@@ -262,7 +295,9 @@ def parse_gutenberg_epistolary(source_path: Path, title: str) -> list[Section]:
             sec_id = "conclusion" if label == "CONCLUSION" else f"letter-{label.lower()}"
             sec_label = label if label == "CONCLUSION" else f"Letter {label}"
         elif heading_mode == "letter-heading":
-            title_text, subtitle, body = _split_letter_heading_paragraphs(paras, label)
+            title_text, subtitle, body = _split_letter_heading_paragraphs(
+                paras, label, _extract_global_correspondent_title(lines, line_no)
+            )
             sec_id = f"letter-{label.lower()}"
             sec_label = f"Letter {label}"
         else:

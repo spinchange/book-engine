@@ -45,6 +45,7 @@ Expected source structure:
   - direct `To ...` letter headers followed by the salutation/body
   - standalone `LETTER I`, `LETTER II`, etc. followed by an uppercase correspondent line containing ` TO `
   - standalone `LETTER I`, `LETTER II`, etc. followed by an uppercase salutation line such as `DEAR FATHER AND MOTHER,`, optionally with a bracketed continuation note like `[In answer to the preceding.]`
+  - standalone `LETTER I`, `LETTER II`, etc. that inherit a nearby global `FROM ... TO ...` correspondent title block
 - optional short dateline paragraph used as subtitle
 
 Output shape:
@@ -66,8 +67,10 @@ Expected source structure:
 - chapter headings like `CHAPTER I`, `CHAPTER II`, or `CHAPTER 3`
 - optional chapter title on the next non-blank line
 - or inline Gutenberg headings like `CHAPTER I. A Stormy Beginning`, including wrapped continuation lines before the first blank line
+- or French `CHAPITRE PREMIER` / `CHAPITRE II` headings
 - or top-level `BOOK I` / `BOOK II.` divisions when a work is structurally part-based rather than chapter-based
 - optional editorial coda headings like `THE EDITOR TO THE READER.` when they function as the final top-level section
+- optional appendix headings like `LETTRE À L'ÉDITEUR` and `RÉPONSE.`
 - body paragraphs separated by blank lines
 
 Output shape:

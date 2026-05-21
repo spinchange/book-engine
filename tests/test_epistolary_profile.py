@@ -154,6 +154,32 @@ Let me write, and bewail my miserable hard fate.
 """
 
 
+PORTUGUESE_NUN_STYLE_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK THE LETTERS OF A PORTUGUESE NUN ***
+
+CONTENTS
+
+LETTER I
+
+To think I am scorned, and left by faithless you.
+
+FROM
+
+A NUN TO A CAVALIER
+
+LETTER I
+
+Oh! the unhappy Joys which Love contains.
+
+LETTER II
+
+From a Nun to a Cavalier
+
+Alas! it is impossible to tell.
+
+*** END OF THE PROJECT GUTENBERG EBOOK THE LETTERS OF A PORTUGUESE NUN ***
+"""
+
+
 def test_extract_gutenberg_main_text_accepts_numeric_ebook_markers() -> None:
     main = extract_gutenberg_main_text(HUMPHRY_CLINKER_TEXT, "The Expedition of Humphry Clinker")
 
@@ -233,6 +259,20 @@ def test_parse_gutenberg_epistolary_supports_pamela_style_letter_headings(tmp_pa
     assert sections[2].body == ["I write again to assure you of my duty."]
     assert sections[3].title == "O MY DEAREST FATHER AND MOTHER!"
     assert sections[3].body == ["Let me write, and bewail my miserable hard fate."]
+
+
+def test_parse_gutenberg_epistolary_skips_contents_false_positives_and_supports_global_correspondent_titles(tmp_path: Path) -> None:
+    source = tmp_path / "portuguese-nun-sample.txt"
+    source.write_text(PORTUGUESE_NUN_STYLE_TEXT, encoding="utf-8")
+
+    sections = parse_gutenberg_epistolary(source, "The Letters of a Portuguese Nun")
+
+    assert [section.id for section in sections] == ["letter-i", "letter-ii"]
+    assert sections[0].title == "From a Nun to a Cavalier"
+    assert sections[0].subtitle == ""
+    assert sections[0].body == ["Oh! the unhappy Joys which Love contains."]
+    assert sections[1].title == "From a Nun to a Cavalier"
+    assert sections[1].body == ["Alas! it is impossible to tell."]
 
 
 def test_build_library_supports_humphry_clinker_style_epistolary_book(tmp_path: Path) -> None:

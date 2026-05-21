@@ -17,10 +17,12 @@ The `epistolary` parser now handles these Gutenberg heading patterns:
 - direct `To ...` letter headers
 - Clarissa-style `LETTER I` headings followed by an uppercase correspondent line containing ` TO `
 - Pamela-style `LETTER I` headings followed by an uppercase salutation line, optionally after a bracketed continuation note
+- Portuguese-Nun-style `LETTER I` headings that inherit a nearby global `FROM ... TO ...` correspondent title
 
 The `chaptered` parser now handles both of these Gutenberg heading patterns:
 - `CHAPTER I` followed by a title on the next non-blank line
 - `CHAPTER I. Inline title text` with wrapped title lines before the first blank line
+- French `CHAPITRE PREMIER` / `CHAPITRE II` headings, including appendix-style `LETTRE À L'ÉDITEUR` and `RÉPONSE.` sections
 - top-level `BOOK I` / `BOOK II.` divisions, including Werther-style editorial codas like `THE EDITOR TO THE READER.`
 
 ## Local development

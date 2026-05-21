@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from pathlib import Path
 
 from ..models import Section
@@ -69,10 +70,38 @@ def _parse_heading(line: str) -> tuple[str, str, str] | None:
         inline_title = trailing.lstrip(".:-— ").strip()
         return kind, f"{prefix.strip()} {numeral}", inline_title
 
+    if stripped.startswith("CHAPITRE "):
+        remainder = stripped[len("CHAPITRE ") :]
+        match = re.match(r"(PREMIER|[IVXLCDM]+|\d+)(.*)$", remainder)
+        if not match:
+            return None
+        numeral = match.group(1).title() if match.group(1) == "PREMIER" else match.group(1)
+        trailing = match.group(2).strip()
+        inline_title = trailing.lstrip(".:-— ").strip()
+        return "chapitre", f"Chapitre {numeral}", inline_title
+
     if re.fullmatch(r"THE EDITOR TO THE READER\.?", stripped):
         return "editorial", "THE EDITOR TO THE READER", ""
 
+    if stripped == "LETTRE À L'ÉDITEUR":
+        return "editorial-letter", "Lettre à l'éditeur", ""
+
+    if stripped == "RÉPONSE.":
+        return "response", "Réponse", ""
+
     return None
+
+
+
+def _line_starts_heading(line: str) -> bool:
+    return _parse_heading(line) is not None
+
+
+
+def _slugify_label(text: str) -> str:
+    normalized = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]+", "-", normalized.lower()).strip("-")
+
 
 
 def _looks_like_short_date_heading(text: str) -> bool:
@@ -99,7 +128,7 @@ def _collect_wrapped_heading_title(lines: list[str], start_index: int, inline_ti
     probe_index = start_index + 1
     while probe_index < len(lines):
         candidate = lines[probe_index].strip()
-        if not candidate or candidate.startswith("CHAPTER "):
+        if not candidate or _line_starts_heading(candidate):
             break
         title_parts.append(candidate)
         probe_index += 1
@@ -120,7 +149,7 @@ def _consume_sparse_wrapped_title_block(chunk_lines: list[str]) -> tuple[list[st
     scan_index = probe_index
     while scan_index < len(chunk_lines):
         candidate = chunk_lines[scan_index].strip()
-        if candidate.startswith("CHAPTER "):
+        if _line_starts_heading(candidate):
             break
         if candidate:
             title_parts.append(candidate)
@@ -148,7 +177,7 @@ def parse_chaptered_text(source_path: Path, title: str) -> list[Section]:
             continue
         kind, label, inline_title = parsed
         headings.append((index, kind, label, inline_title))
-        if kind == "chapter" and inline_title and label not in toc_titles:
+        if kind in {"chapter", "chapitre"} and inline_title and label not in toc_titles:
             toc_titles[label] = _collect_wrapped_heading_title(lines, index, inline_title)
 
     if not headings:
@@ -172,7 +201,7 @@ def parse_chaptered_text(source_path: Path, title: str) -> list[Section]:
 
         title_parts: list[str] = []
         subtitle = ""
-        if kind == "chapter" and inline_title:
+        if kind in {"chapter", "chapitre"} and inline_title:
             title_parts.append(inline_title)
             while chunk_lines and not chunk_lines[0].strip():
                 chunk_lines.pop(0)
@@ -180,10 +209,10 @@ def parse_chaptered_text(source_path: Path, title: str) -> list[Section]:
                 title_parts.append(chunk_lines.pop(0).strip())
             while chunk_lines and not chunk_lines[0].strip():
                 chunk_lines.pop(0)
-        elif kind in {"chapter", "part"}:
+        elif kind == "chapter":
             while chunk_lines and not chunk_lines[0].strip():
                 chunk_lines.pop(0)
-            if kind == "chapter" and label in toc_titles:
+            if label in toc_titles:
                 title_parts.append(toc_titles[label])
             else:
                 sparse_wrapped_title = _consume_sparse_wrapped_title_block(chunk_lines)
@@ -194,6 +223,22 @@ def parse_chaptered_text(source_path: Path, title: str) -> list[Section]:
                         title_parts.append(chunk_lines.pop(0).strip())
                     while chunk_lines and not chunk_lines[0].strip():
                         chunk_lines.pop(0)
+        elif kind == "chapitre":
+            while chunk_lines and not chunk_lines[0].strip():
+                chunk_lines.pop(0)
+            if label in toc_titles:
+                title_parts.append(toc_titles[label])
+        elif kind == "part":
+            while chunk_lines and not chunk_lines[0].strip():
+                chunk_lines.pop(0)
+            sparse_wrapped_title = _consume_sparse_wrapped_title_block(chunk_lines)
+            if sparse_wrapped_title is not None:
+                title_parts, chunk_lines = sparse_wrapped_title
+            elif chunk_lines and chunk_lines[0].strip():
+                while chunk_lines and chunk_lines[0].strip():
+                    title_parts.append(chunk_lines.pop(0).strip())
+                while chunk_lines and not chunk_lines[0].strip():
+                    chunk_lines.pop(0)
 
         else:
             while chunk_lines and not chunk_lines[0].strip():
@@ -203,24 +248,32 @@ def parse_chaptered_text(source_path: Path, title: str) -> list[Section]:
         body = _paragraphize(raw_body)
 
         if kind == "chapter":
-            section_id = label.lower().replace(" ", "-")
+            section_id = _slugify_label(label)
             readable_label = f"Chapter {label.split(maxsplit=1)[1]}"
             title_line = re.sub(r"\s+", " ", " ".join(title_parts)).strip()
+        elif kind == "chapitre":
+            section_id = _slugify_label(label)
+            readable_label = label
+            title_line = re.sub(r"\s+", " ", " ".join(title_parts)).strip() or readable_label
         elif kind == "book":
-            section_id = label.lower().replace(" ", "-")
+            section_id = _slugify_label(label)
             readable_label = f"Book {label.split(maxsplit=1)[1]}"
             title_line = readable_label
             if body and _looks_like_short_date_heading(body[0].upper()):
                 subtitle = body[0]
                 body = body[1:]
         elif kind == "part":
-            section_id = label.lower().replace(" ", "-")
+            section_id = _slugify_label(label)
             readable_label = f"Part {label.split(maxsplit=1)[1]}"
             title_line = re.sub(r"\s+", " ", " ".join(title_parts)).strip() or readable_label
-        else:
-            section_id = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")
+        elif kind == "editorial":
+            section_id = _slugify_label(label)
             readable_label = "Editor"
             title_line = "The Editor to the Reader"
+        else:
+            section_id = _slugify_label(label)
+            readable_label = label
+            title_line = label
 
         sections.append(
             Section(

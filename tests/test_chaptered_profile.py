@@ -175,6 +175,27 @@ At that time I was only twenty-four.
 *** END OF THE PROJECT GUTENBERG EBOOK NOTES FROM THE UNDERGROUND ***
 """
 
+FRENCH_CHAPTERED_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK ADOLPHE ***
+
+CHAPITRE PREMIER
+
+Je venais de finir à vingt-deux ans mes études.
+
+CHAPITRE II
+
+Distrait, inattentif, ennuyé.
+
+LETTRE À L'ÉDITEUR
+
+Je vous renvoie, monsieur, le manuscrit.
+
+RÉPONSE.
+
+Oui, monsieur, je publierai le manuscrit.
+
+*** END OF THE PROJECT GUTENBERG EBOOK ADOLPHE ***
+"""
+
 
 def test_parse_chaptered_text_splits_chapters_and_paragraphs(tmp_path: Path) -> None:
     source = tmp_path / "sample.txt"
@@ -298,6 +319,33 @@ def test_parse_chaptered_text_supports_part_headings_with_titles(tmp_path: Path)
         "I",
         "At that time I was only twenty-four.",
     ]
+
+
+def test_parse_chaptered_text_supports_french_chapter_and_appendix_headings(tmp_path: Path) -> None:
+    source = tmp_path / "adolphe-sample.txt"
+    source.write_text(FRENCH_CHAPTERED_TEXT, encoding="utf-8")
+
+    sections = parse_chaptered_text(source, "Adolphe")
+
+    assert [section.id for section in sections] == [
+        "chapitre-premier",
+        "chapitre-ii",
+        "lettre-a-l-editeur",
+        "reponse",
+    ]
+    assert [section.label for section in sections] == [
+        "Chapitre Premier",
+        "Chapitre II",
+        "Lettre à l'éditeur",
+        "Réponse",
+    ]
+    assert sections[0].title == "Chapitre Premier"
+    assert sections[0].body == ["Je venais de finir à vingt-deux ans mes études."]
+    assert sections[1].body == ["Distrait, inattentif, ennuyé."]
+    assert sections[2].title == "Lettre à l'éditeur"
+    assert sections[2].body == ["Je vous renvoie, monsieur, le manuscrit."]
+    assert sections[3].title == "Réponse"
+    assert sections[3].body == ["Oui, monsieur, je publierai le manuscrit."]
 
 
 def test_build_library_supports_chaptered_and_epistolary_books(tmp_path: Path) -> None:
