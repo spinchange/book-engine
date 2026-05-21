@@ -23,6 +23,19 @@ This is chapter two.
 *** END OF THE PROJECT GUTENBERG EBOOK SAMPLE CHAPTERED BOOK ***
 """
 
+PLAIN_CHAPTERED_TEXT = """CHAPTER I
+A Beginning
+
+This is the first paragraph.
+
+This is the second paragraph.
+
+CHAPTER II
+Another Turn
+
+This is chapter two.
+"""
+
 INLINE_HEADING_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK THE ADVENTURES OF TOM SAWYER ***
 
 CHAPTER I. Y-o-u-u Tom—Aunt Polly Decides Upon her Duty—Tom Practices
@@ -205,6 +218,19 @@ def test_parse_chaptered_text_splits_chapters_and_paragraphs(tmp_path: Path) -> 
 
     assert [section.id for section in sections] == ["chapter-i", "chapter-ii"]
     assert [section.label for section in sections] == ["Chapter I", "Chapter II"]
+    assert sections[0].title == "A Beginning"
+    assert sections[0].body == ["This is the first paragraph.", "This is the second paragraph."]
+    assert sections[1].title == "Another Turn"
+    assert sections[1].body == ["This is chapter two."]
+
+
+def test_parse_chaptered_text_supports_plain_text_sources(tmp_path: Path) -> None:
+    source = tmp_path / "sample-plain.txt"
+    source.write_text(PLAIN_CHAPTERED_TEXT, encoding="utf-8")
+
+    sections = parse_chaptered_text(source, "Sample Chaptered Book", source_format="plain-txt")
+
+    assert [section.id for section in sections] == ["chapter-i", "chapter-ii"]
     assert sections[0].title == "A Beginning"
     assert sections[0].body == ["This is the first paragraph.", "This is the second paragraph."]
     assert sections[1].title == "Another Turn"
@@ -422,6 +448,42 @@ Your letter reached me.
     assert (output_dir / "books" / "sample-chaptered" / "chapter-ii.html").exists()
     assert (output_dir / "books" / "sample-letters" / "letter-i.html").exists()
     assert (output_dir / "books" / "sample-letters" / "letter-ii.html").exists()
+
+
+def test_build_library_supports_plain_text_chaptered_book(tmp_path: Path) -> None:
+    content_root = tmp_path / "library"
+    books_dir = content_root / "books"
+    chaptered_dir = books_dir / "plain-chaptered"
+    chaptered_dir.mkdir(parents=True)
+
+    (content_root / "library.yaml").write_text(
+        """title: Plain Text Library
+books_dir: books
+output_dir: dist
+""",
+        encoding="utf-8",
+    )
+    (chaptered_dir / "book.yaml").write_text(
+        """id: plain-chaptered
+title: Plain Chaptered Book
+author: Test Author
+year: \"1903\"
+source_file: source.txt
+source_format: plain-txt
+profile: chaptered
+parser: gutenberg-chapters-v1
+theme: classic-paper
+""",
+        encoding="utf-8",
+    )
+    (chaptered_dir / "source.txt").write_text(PLAIN_CHAPTERED_TEXT, encoding="utf-8")
+
+    output_dir = build_library(content_root)
+
+    assert (output_dir / "index.html").exists()
+    assert (output_dir / "books" / "plain-chaptered" / "index.html").exists()
+    assert (output_dir / "books" / "plain-chaptered" / "chapter-i.html").exists()
+    assert (output_dir / "books" / "plain-chaptered" / "chapter-ii.html").exists()
 
 
 def test_build_library_supports_werther_style_book_sections(tmp_path: Path) -> None:

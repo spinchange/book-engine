@@ -11,13 +11,22 @@ It is built around a clean split between:
 - `epistolary` — one HTML page per letter/document with sequential navigation
 - `chaptered` — one HTML page per chapter with a generated table of contents
 
-Both profiles currently support `gutenberg-txt` inputs.
+Both profiles currently support these source formats:
+- `gutenberg-txt` — Project Gutenberg plain text with wrapper markers that should be stripped before parsing
+- `plain-txt` — already-normalized plain text with no Gutenberg wrapper assumptions
+
 The `epistolary` parser now handles these Gutenberg heading patterns:
 - Roman-numeral sections with italic `_From ... to ..._` correspondent lines
 - direct `To ...` letter headers
 - Clarissa-style `LETTER I` headings followed by an uppercase correspondent line containing ` TO `
 - Pamela-style `LETTER I` headings followed by an uppercase salutation line, optionally after a bracketed continuation note
 - Portuguese-Nun-style `LETTER I` headings that inherit a nearby global `FROM ... TO ...` correspondent title
+
+`plain-txt` currently reuses the same section-heading grammars as `gutenberg-txt`; it only changes source extraction by treating the whole file as the parseable body.
+
+Available epistolary parser variants:
+- `gutenberg-letters-v1` — default Gutenberg-oriented epistolary grammar
+- `hyperion-letters-v1` — plain-text Hyperion-style headings like `Hyperion to Bellarmin [I]`
 
 The `chaptered` parser now handles both of these Gutenberg heading patterns:
 - `CHAPTER I` followed by a title on the next non-blank line

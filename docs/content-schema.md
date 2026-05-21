@@ -29,6 +29,16 @@ description: Jane Austen's epistolary novella rendered as linked HTML pages.
 
 ## Profile-specific expectations
 
+## `source_format`
+
+- `gutenberg-txt`
+  - expects Project Gutenberg start/end markers
+  - strips wrapper text before handing content to the profile parser
+- `plain-txt`
+  - treats the whole file as already-normalized body text
+  - makes no Project Gutenberg marker assumptions
+  - still relies on the selected profile's heading grammar (`epistolary`, `chaptered`, etc.)
+
 ### `epistolary`
 
 Recommended parser metadata:
@@ -38,8 +48,16 @@ profile: epistolary
 parser: gutenberg-letters-v1
 ```
 
+Alternate parser for Hyperion-style plain texts:
+
+```yaml
+profile: epistolary
+source_format: plain-txt
+parser: hyperion-letters-v1
+```
+
 Expected source structure:
-- Project Gutenberg header/footer markers
+- either Project Gutenberg header/footer markers (`gutenberg-txt`) or already-normalized plain text (`plain-txt`)
 - one of these heading grammars:
   - section headings as Roman numerals (`I`, `II`, ...`) with a following italicized sender/recipient line such as `_From A. to B._`
   - direct `To ...` letter headers followed by the salutation/body
@@ -47,6 +65,12 @@ Expected source structure:
   - standalone `LETTER I`, `LETTER II`, etc. followed by an uppercase salutation line such as `DEAR FATHER AND MOTHER,`, optionally with a bracketed continuation note like `[In answer to the preceding.]`
   - standalone `LETTER I`, `LETTER II`, etc. that inherit a nearby global `FROM ... TO ...` correspondent title block
 - optional short dateline paragraph used as subtitle
+
+Additional supported epistolary parser variant:
+- `hyperion-letters-v1`
+  - intended for `plain-txt`
+  - expects correspondent headings like `Hyperion to Bellarmin [I]`
+  - uses the bracketed Roman numeral as the section label/id basis
 
 Output shape:
 - one page per letter/document
@@ -63,7 +87,7 @@ parser: gutenberg-chapters-v1
 ```
 
 Expected source structure:
-- Project Gutenberg header/footer markers
+- either Project Gutenberg header/footer markers (`gutenberg-txt`) or already-normalized plain text (`plain-txt`)
 - chapter headings like `CHAPTER I`, `CHAPTER II`, or `CHAPTER 3`
 - optional chapter title on the next non-blank line
 - or inline Gutenberg headings like `CHAPTER I. A Stormy Beginning`, including wrapped continuation lines before the first blank line

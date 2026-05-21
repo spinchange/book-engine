@@ -2,6 +2,7 @@ from pathlib import Path
 
 from book_engine.builder import build_library
 from book_engine.parsers.gutenberg_txt import extract_gutenberg_main_text, parse_gutenberg_epistolary
+from book_engine.parsers.hyperion_txt import parse_hyperion_epistolary
 
 
 HUMPHRY_CLINKER_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK 2160 ***
@@ -47,6 +48,38 @@ London, Tuesday.
 Your letter reached me.
 
 *** END OF THE PROJECT GUTENBERG EBOOK SAMPLE LETTERS ***
+"""
+
+
+PLAIN_SAMPLE_LETTERS_TEXT = """I
+_From A. to B._
+
+Bath, Monday.
+
+My dear friend,
+
+I write to you at once.
+
+II
+_From B. to A._
+
+London, Tuesday.
+
+Your letter reached me.
+"""
+
+
+HYPERION_STYLE_TEXT = """Hyperion to Bellarmin [I]
+
+Athens.
+
+I have at last reached the islands of my longing.
+
+Hyperion to Bellarmin [II]
+
+Smyrna.
+
+My heart is still full of Diotima.
 """
 
 
@@ -208,6 +241,37 @@ def test_parse_gutenberg_epistolary_supports_to_line_letters(tmp_path: Path) -> 
         "We are all arrived safely.",
         "The waters seem to agree with my uncle.",
     ]
+
+
+def test_parse_gutenberg_epistolary_supports_plain_text_sources(tmp_path: Path) -> None:
+    source = tmp_path / "sample-letters-plain.txt"
+    source.write_text(PLAIN_SAMPLE_LETTERS_TEXT, encoding="utf-8")
+
+    sections = parse_gutenberg_epistolary(source, "Sample Letters", source_format="plain-txt")
+
+    assert [section.id for section in sections] == ["letter-i", "letter-ii"]
+    assert sections[0].title == "From A. to B."
+    assert sections[0].subtitle == "Bath, Monday."
+    assert sections[0].body == ["My dear friend,", "I write to you at once."]
+    assert sections[1].title == "From B. to A."
+    assert sections[1].subtitle == "London, Tuesday."
+    assert sections[1].body == ["Your letter reached me."]
+
+
+def test_parse_hyperion_epistolary_supports_bracketed_letter_headings(tmp_path: Path) -> None:
+    source = tmp_path / "hyperion-sample.txt"
+    source.write_text(HYPERION_STYLE_TEXT, encoding="utf-8")
+
+    sections = parse_hyperion_epistolary(source, "Hyperion", source_format="plain-txt")
+
+    assert [section.id for section in sections] == ["letter-i", "letter-ii"]
+    assert [section.label for section in sections] == ["Letter I", "Letter II"]
+    assert sections[0].title == "Hyperion to Bellarmin"
+    assert sections[0].subtitle == "Athens."
+    assert sections[0].body == ["I have at last reached the islands of my longing."]
+    assert sections[1].title == "Hyperion to Bellarmin"
+    assert sections[1].subtitle == "Smyrna."
+    assert sections[1].body == ["My heart is still full of Diotima."]
 
 
 def test_parse_gutenberg_epistolary_supports_clarissa_style_letter_headings(tmp_path: Path) -> None:
@@ -384,3 +448,75 @@ theme: classic-paper
     assert (output_dir / "books" / "pamela-sample" / "letter-ii.html").exists()
     assert (output_dir / "books" / "pamela-sample" / "letter-iii.html").exists()
     assert (output_dir / "books" / "pamela-sample" / "letter-iv.html").exists()
+
+
+def test_build_library_supports_plain_text_epistolary_book(tmp_path: Path) -> None:
+    content_root = tmp_path / "library"
+    books_dir = content_root / "books"
+    plain_dir = books_dir / "plain-letters"
+    plain_dir.mkdir(parents=True)
+
+    (content_root / "library.yaml").write_text(
+        """title: Plain Text Library
+books_dir: books
+output_dir: dist
+""",
+        encoding="utf-8",
+    )
+    (plain_dir / "book.yaml").write_text(
+        """id: plain-letters
+title: Plain Letters
+author: Test Author
+year: \"1902\"
+source_file: source.txt
+source_format: plain-txt
+profile: epistolary
+parser: gutenberg-letters-v1
+theme: classic-paper
+""",
+        encoding="utf-8",
+    )
+    (plain_dir / "source.txt").write_text(PLAIN_SAMPLE_LETTERS_TEXT, encoding="utf-8")
+
+    output_dir = build_library(content_root)
+
+    assert (output_dir / "index.html").exists()
+    assert (output_dir / "books" / "plain-letters" / "index.html").exists()
+    assert (output_dir / "books" / "plain-letters" / "letter-i.html").exists()
+    assert (output_dir / "books" / "plain-letters" / "letter-ii.html").exists()
+
+
+def test_build_library_supports_hyperion_parser_on_plain_text_book(tmp_path: Path) -> None:
+    content_root = tmp_path / "library"
+    books_dir = content_root / "books"
+    hyperion_dir = books_dir / "hyperion"
+    hyperion_dir.mkdir(parents=True)
+
+    (content_root / "library.yaml").write_text(
+        """title: Hyperion Library
+books_dir: books
+output_dir: dist
+""",
+        encoding="utf-8",
+    )
+    (hyperion_dir / "book.yaml").write_text(
+        """id: hyperion
+title: Hyperion
+author: Friedrich Holderlin
+year: \"1819\"
+source_file: source.txt
+source_format: plain-txt
+profile: epistolary
+parser: hyperion-letters-v1
+theme: classic-paper
+""",
+        encoding="utf-8",
+    )
+    (hyperion_dir / "source.txt").write_text(HYPERION_STYLE_TEXT, encoding="utf-8")
+
+    output_dir = build_library(content_root)
+
+    assert (output_dir / "index.html").exists()
+    assert (output_dir / "books" / "hyperion" / "index.html").exists()
+    assert (output_dir / "books" / "hyperion" / "letter-i.html").exists()
+    assert (output_dir / "books" / "hyperion" / "letter-ii.html").exists()

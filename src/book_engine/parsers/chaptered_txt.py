@@ -5,7 +5,7 @@ import unicodedata
 from pathlib import Path
 
 from ..models import Section
-from .gutenberg_txt import extract_gutenberg_main_text
+from .gutenberg_txt import extract_source_main_text
 
 
 def _paragraphize(raw_body: str) -> list[str]:
@@ -164,9 +164,11 @@ def _consume_sparse_wrapped_title_block(chunk_lines: list[str]) -> tuple[list[st
     return None
 
 
-def parse_chaptered_text(source_path: Path, title: str) -> list[Section]:
+def parse_chaptered_text(
+    source_path: Path, title: str, source_format: str = "gutenberg-txt"
+) -> list[Section]:
     text = source_path.read_text(encoding="utf-8", errors="replace")
-    main_text = extract_gutenberg_main_text(text, title)
+    main_text = extract_source_main_text(text, title, source_format=source_format)
     lines = [line.rstrip() for line in main_text.split("\n")]
 
     headings: list[tuple[int, str, str, str]] = []

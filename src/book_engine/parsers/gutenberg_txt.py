@@ -6,8 +6,12 @@ from pathlib import Path
 from ..models import Section
 
 
+def _normalize_source_text(text: str) -> str:
+    return text.replace("\ufeff", "").replace("\r\n", "\n").strip()
+
+
 def extract_gutenberg_main_text(text: str, title: str) -> str:
-    text = text.replace("\ufeff", "").replace("\r\n", "\n")
+    text = _normalize_source_text(text)
     start_marker = f"*** START OF THE PROJECT GUTENBERG EBOOK {title.upper()} ***"
     end_marker = f"*** END OF THE PROJECT GUTENBERG EBOOK {title.upper()} ***"
     if start_marker in text and end_marker in text:
@@ -20,6 +24,14 @@ def extract_gutenberg_main_text(text: str, title: str) -> str:
     if not generic_start or not generic_end:
         raise ValueError("Could not locate Project Gutenberg start/end markers")
     return text[generic_start.end() : generic_end.start()].strip()
+
+
+def extract_source_main_text(text: str, title: str, source_format: str = "gutenberg-txt") -> str:
+    if source_format == "gutenberg-txt":
+        return extract_gutenberg_main_text(text, title)
+    if source_format == "plain-txt":
+        return _normalize_source_text(text)
+    raise ValueError(f"Unsupported source format: {source_format}")
 
 
 def _paragraphize(raw_body: str) -> list[str]:
@@ -232,9 +244,11 @@ def _split_letter_heading_paragraphs(
 
 
 
-def parse_gutenberg_epistolary(source_path: Path, title: str) -> list[Section]:
+def parse_gutenberg_epistolary(
+    source_path: Path, title: str, source_format: str = "gutenberg-txt"
+) -> list[Section]:
     text = source_path.read_text(encoding="utf-8", errors="replace")
-    main_text = extract_gutenberg_main_text(text, title)
+    main_text = extract_source_main_text(text, title, source_format=source_format)
     lines = main_text.split("\n")
 
     heading_mode = None
