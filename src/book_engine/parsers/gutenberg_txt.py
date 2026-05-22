@@ -175,7 +175,31 @@ def _looks_like_mixed_case_continuation_header(line: str) -> bool:
     return bool(prefix and _is_uppercaseish(prefix))
 
 
-LETTER_HEADING_RE = re.compile(r"LETTER\s+([IVXLCDM]+)\.?(?:\s+(\[.*\]))?")
+LETTER_HEADING_RE = re.compile(r"LETTER\s+([IVXLCDM]+)\.?(?:\s+(.*))?$", re.IGNORECASE)
+
+
+def _parse_letter_heading_line(line: str) -> tuple[str, str, str] | None:
+    stripped = line.strip()
+    if not stripped.startswith(("LETTER ", "Letter ")):
+        return None
+
+    match = LETTER_HEADING_RE.fullmatch(stripped)
+    if not match:
+        return None
+
+    label = match.group(1)
+    remainder = (match.group(2) or "").strip()
+    if not remainder:
+        return label, "", ""
+
+    notes = re.findall(r"\[[^\]]+\]", remainder)
+    heading_note = " ".join(notes)
+    inline_title = re.sub(r"\s*\[[^\]]+\]\s*", " ", remainder).strip()
+    inline_title = re.sub(r"\s+", " ", inline_title)
+    if inline_title and not inline_title[0].isupper():
+        return None
+    return label, heading_note, inline_title
+
 
 LEADING_MONTH_DATE_RE = re.compile(
     r"^((?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?[.,-]?)\s+(.+)$",
@@ -264,9 +288,13 @@ def _split_leading_date_paragraph(paragraph: str) -> tuple[str, str] | None:
 
 
 def _looks_like_letter_heading(lines: list[str], index: int) -> bool:
-    heading = lines[index].strip()
-    if not LETTER_HEADING_RE.fullmatch(heading):
+    parsed = _parse_letter_heading_line(lines[index])
+    if not parsed:
         return False
+
+    _, _, inline_title = parsed
+    if inline_title:
+        return True
 
     tail = [ln.strip() for ln in lines[index + 1 : index + 6] if ln.strip()]
     return _looks_like_correspondent_header(tail) or _extract_global_correspondent_title(lines, index) is not None
@@ -291,8 +319,20 @@ def _find_letter_heading_start(lines: list[str]) -> int | None:
 
 
 def _split_letter_heading_paragraphs(
-    paras: list[str], fallback_label: str, global_title: str | None = None
+    paras: list[str], fallback_label: str, global_title: str | None = None, inline_title: str = ""
 ) -> tuple[str, str, list[str]]:
+    if inline_title:
+        subtitle = ""
+        body_start = 0
+        if paras and _looks_like_date_line(paras[0]):
+            split_date_paragraph = _split_leading_date_paragraph(paras[0])
+            if split_date_paragraph:
+                subtitle, inline_dated_body = split_date_paragraph
+                return inline_title, subtitle, [inline_dated_body] + paras[1:]
+            subtitle = paras[0]
+            body_start = 1
+        return inline_title, subtitle, paras[body_start:]
+
     if not paras:
         return global_title or f"Letter {fallback_label}", "", []
 
@@ -331,6 +371,14 @@ def _split_letter_heading_paragraphs(
 
 
 
+def _disambiguate_section_id(base_id: str, seen_ids: dict[str, int]) -> str:
+    count = seen_ids.get(base_id, 0) + 1
+    seen_ids[base_id] = count
+    if count == 1:
+        return base_id
+    return f"{base_id}-{count}"
+
+
 def parse_gutenberg_epistolary(
     source_path: Path, title: str, source_format: str = "gutenberg-txt"
 ) -> list[Section]:
@@ -357,27 +405,28 @@ def parse_gutenberg_epistolary(
     if start_idx is None or heading_mode is None:
         raise RuntimeError("Could not locate first epistolary section")
 
-    headings: list[tuple[int, str, str]] = []
+    headings: list[tuple[int, str, str, str]] = []
     if heading_mode == "roman":
         for i in range(start_idx, len(lines)):
             s = lines[i].strip()
             if _looks_like_roman_epistolary_heading(lines, i):
-                headings.append((i, s, ""))
+                headings.append((i, s, "", ""))
             elif s == "CONCLUSION":
-                headings.append((i, s, ""))
+                headings.append((i, s, "", ""))
     elif heading_mode == "letter-heading":
         for i in range(start_idx, len(lines)):
-            if _looks_like_letter_heading(lines, i):
-                match = LETTER_HEADING_RE.fullmatch(lines[i].strip())
-                if match:
-                    headings.append((i, match.group(1), match.group(2) or ""))
+            parsed = _parse_letter_heading_line(lines[i])
+            if _looks_like_letter_heading(lines, i) and parsed:
+                label, heading_note, inline_title = parsed
+                headings.append((i, label, heading_note, inline_title))
     else:
         for i in range(start_idx, len(lines)):
             if _looks_like_to_line_heading(lines, i):
-                headings.append((i, str(len(headings) + 1), ""))
+                headings.append((i, str(len(headings) + 1), "", ""))
 
     sections: list[Section] = []
-    for index, (line_no, label, heading_note) in enumerate(headings):
+    seen_ids: dict[str, int] = {}
+    for index, (line_no, label, heading_note, inline_title) in enumerate(headings):
         end = headings[index + 1][0] if index + 1 < len(headings) else len(lines)
         chunk_lines = [line.rstrip() for line in lines[line_no:end]]
         raw_body = "\n".join(chunk_lines[1:]).strip()
@@ -410,7 +459,7 @@ def parse_gutenberg_epistolary(
             sec_label = label if label == "CONCLUSION" else f"Letter {label}"
         elif heading_mode == "letter-heading":
             title_text, subtitle, body = _split_letter_heading_paragraphs(
-                paras, label, _extract_global_correspondent_title(lines, line_no)
+                paras, label, _extract_global_correspondent_title(lines, line_no), inline_title=inline_title
             )
             if heading_note:
                 title_text = f"{title_text} {heading_note}".strip()
@@ -425,7 +474,7 @@ def parse_gutenberg_epistolary(
 
         sections.append(
             Section(
-                id=sec_id,
+                id=_disambiguate_section_id(sec_id, seen_ids),
                 order=index + 1,
                 label=sec_label,
                 title=title_text,

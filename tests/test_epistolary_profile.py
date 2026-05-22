@@ -290,6 +290,64 @@ Alas! it is impossible to tell.
 """
 
 
+ELOISA_INLINE_HEADING_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK ELOISA SAMPLE ***
+
+Eloisa
+
+Volume I
+
+Letter I. To Eloisa.
+
+I must fly from you.
+
+Letter II. From Eloisa.
+
+You are too hasty.
+
+Letter III. [6] To Eloisa.
+
+I have received your last.
+
+Letter IV. Answer to the Preceding.
+
+I answer without delay.
+
+*** END OF THE PROJECT GUTENBERG EBOOK ELOISA SAMPLE ***
+"""
+
+
+DUPLICATE_LABELS_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK DUPLICATE LABELS SAMPLE ***
+
+Letter I. To Eloisa.
+
+First body.
+
+Letter I. From Eloisa.
+
+Second body.
+
+*** END OF THE PROJECT GUTENBERG EBOOK DUPLICATE LABELS SAMPLE ***
+"""
+
+
+LOWERCASE_FALSE_POSITIVE_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK LOWERCASE FALSE POSITIVE SAMPLE ***
+
+Letter I. To Eloisa.
+
+First body.
+
+letter i have just hinted at.
+
+Still the same letter body.
+
+Letter II. From Eloisa.
+
+Second body.
+
+*** END OF THE PROJECT GUTENBERG EBOOK LOWERCASE FALSE POSITIVE SAMPLE ***
+"""
+
+
 def test_extract_gutenberg_main_text_accepts_numeric_ebook_markers() -> None:
     main = extract_gutenberg_main_text(HUMPHRY_CLINKER_TEXT, "The Expedition of Humphry Clinker")
 
@@ -468,6 +526,47 @@ def test_parse_gutenberg_epistolary_skips_contents_false_positives_and_supports_
     assert sections[0].body == ["Oh! the unhappy Joys which Love contains."]
     assert sections[1].title == "From a Nun to a Cavalier"
     assert sections[1].body == ["Alas! it is impossible to tell."]
+
+
+def test_parse_gutenberg_epistolary_supports_eloisa_inline_letter_headings(tmp_path: Path) -> None:
+    source = tmp_path / "eloisa-inline-headings.txt"
+    source.write_text(ELOISA_INLINE_HEADING_TEXT, encoding="utf-8")
+
+    sections = parse_gutenberg_epistolary(source, "Eloisa Sample")
+
+    assert [section.id for section in sections] == ["letter-i", "letter-ii", "letter-iii", "letter-iv"]
+    assert [section.title for section in sections] == [
+        "To Eloisa.",
+        "From Eloisa.",
+        "To Eloisa. [6]",
+        "Answer to the Preceding.",
+    ]
+    assert sections[0].body == ["I must fly from you."]
+    assert sections[1].body == ["You are too hasty."]
+    assert sections[2].body == ["I have received your last."]
+    assert sections[3].body == ["I answer without delay."]
+
+
+def test_parse_gutenberg_epistolary_disambiguates_duplicate_letter_ids(tmp_path: Path) -> None:
+    source = tmp_path / "duplicate-labels.txt"
+    source.write_text(DUPLICATE_LABELS_TEXT, encoding="utf-8")
+
+    sections = parse_gutenberg_epistolary(source, "Duplicate Labels Sample")
+
+    assert [section.id for section in sections] == ["letter-i", "letter-i-2"]
+    assert [section.label for section in sections] == ["Letter I", "Letter I"]
+    assert [section.title for section in sections] == ["To Eloisa.", "From Eloisa."]
+
+
+def test_parse_gutenberg_epistolary_rejects_lowercase_inline_false_positives(tmp_path: Path) -> None:
+    source = tmp_path / "lowercase-false-positive.txt"
+    source.write_text(LOWERCASE_FALSE_POSITIVE_TEXT, encoding="utf-8")
+
+    sections = parse_gutenberg_epistolary(source, "Lowercase False Positive Sample")
+
+    assert [section.id for section in sections] == ["letter-i", "letter-ii"]
+    assert sections[0].body == ["First body.", "letter i have just hinted at.", "Still the same letter body."]
+    assert sections[1].body == ["Second body."]
 
 
 def test_build_library_supports_humphry_clinker_style_epistolary_book(tmp_path: Path) -> None:
