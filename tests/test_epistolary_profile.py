@@ -304,15 +304,41 @@ Letter II. From Eloisa.
 
 You are too hasty.
 
-Letter III. [6] To Eloisa.
+Letter iii have just hinted at a danger in the body text.
 
-I have received your last.
+Letter III. Answer to the preceding.
 
-Letter IV. Answer to the Preceding.
-
-I answer without delay.
+We may yet reconcile matters.
 
 *** END OF THE PROJECT GUTENBERG EBOOK ELOISA SAMPLE ***
+"""
+
+
+ABELARD_HELOISE_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK ABELARD SAMPLE ***
+
+The History of Abelard and Heloise
+
+LETTERS.
+
+LETTER I.
+
+_ABELARD to PHILINTUS._
+
+I write under grief.
+
+LETTER II.
+
+_HELOISE to ABELARD._
+
+I remain unhappy.
+
+LETTER III.
+
+_Abelard_ to _Heloise._
+
+Could I have imagined this letter would reach you.
+
+*** END OF THE PROJECT GUTENBERG EBOOK ABELARD SAMPLE ***
 """
 
 
@@ -534,17 +560,30 @@ def test_parse_gutenberg_epistolary_supports_eloisa_inline_letter_headings(tmp_p
 
     sections = parse_gutenberg_epistolary(source, "Eloisa Sample")
 
-    assert [section.id for section in sections] == ["letter-i", "letter-ii", "letter-iii", "letter-iv"]
+    assert [section.id for section in sections] == ["letter-i", "letter-ii", "letter-iii"]
     assert [section.title for section in sections] == [
         "To Eloisa.",
         "From Eloisa.",
-        "To Eloisa. [6]",
-        "Answer to the Preceding.",
+        "Answer to the preceding.",
     ]
     assert sections[0].body == ["I must fly from you."]
-    assert sections[1].body == ["You are too hasty."]
-    assert sections[2].body == ["I have received your last."]
-    assert sections[3].body == ["I answer without delay."]
+    assert sections[1].body == ["You are too hasty.", "Letter iii have just hinted at a danger in the body text."]
+    assert sections[2].body == ["We may yet reconcile matters."]
+
+
+def test_parse_gutenberg_epistolary_supports_abelard_heloise_italic_correspondent_lines(tmp_path: Path) -> None:
+    source = tmp_path / "abelard-heloise.txt"
+    source.write_text(ABELARD_HELOISE_TEXT, encoding="utf-8")
+
+    sections = parse_gutenberg_epistolary(source, "Abelard Sample")
+
+    assert [section.id for section in sections] == ["letter-i", "letter-ii", "letter-iii"]
+    assert [section.title for section in sections] == [
+        "ABELARD to PHILINTUS.",
+        "HELOISE to ABELARD.",
+        "Abelard to Heloise.",
+    ]
+    assert sections[2].body == ["Could I have imagined this letter would reach you."]
 
 
 def test_parse_gutenberg_epistolary_disambiguates_duplicate_letter_ids(tmp_path: Path) -> None:

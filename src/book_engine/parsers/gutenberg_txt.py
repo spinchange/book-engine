@@ -175,6 +175,30 @@ def _looks_like_mixed_case_continuation_header(line: str) -> bool:
     return bool(prefix and _is_uppercaseish(prefix))
 
 
+def _normalize_italic_correspondent_title(line: str) -> str:
+    title = line.strip()
+    if not title:
+        return title
+    title = re.sub(r"_([^_]+)_", r"\1", title)
+    return re.sub(r"\s+", " ", title).strip()
+
+
+def _looks_like_italic_correspondent_header(line: str) -> bool:
+    stripped = line.strip()
+    if "_" not in stripped or " to " not in stripped.lower():
+        return False
+    normalized = _normalize_italic_correspondent_title(stripped)
+    upper = normalized.upper()
+    if upper.startswith("FROM "):
+        return True
+    if " TO " not in upper:
+        return False
+    left, right = normalized.split(" to ", 1)
+    left = left.strip(' .,_;:-')
+    right = right.strip()
+    return bool(left and right and left[0].isupper() and any(ch.isalpha() for ch in right) and right[0].isupper())
+
+
 LETTER_HEADING_RE = re.compile(r"LETTER\s+([IVXLCDM]+)\.?(?:\s+(.*))?$", re.IGNORECASE)
 
 
@@ -217,6 +241,7 @@ def _looks_like_correspondent_header(lines: list[str]) -> bool:
         (first_upper.startswith("TO ") and len(first) > 3 and first[3].isupper())
         or first_upper.startswith("FROM ")
         or _looks_like_mixed_case_to_header(first)
+        or _looks_like_italic_correspondent_header(first)
         or ((_is_uppercaseish(first) and " FROM " in first_upper))
         or _looks_like_mixed_case_continuation_header(first)
         or "[IN " in first_upper
@@ -340,6 +365,8 @@ def _split_letter_heading_paragraphs(
         return global_title, "", paras
 
     title_text = paras[0]
+    if _looks_like_italic_correspondent_header(title_text):
+        title_text = _normalize_italic_correspondent_title(title_text)
     body_start = 1
     subtitle = ""
     body_prefix: list[str] = []
