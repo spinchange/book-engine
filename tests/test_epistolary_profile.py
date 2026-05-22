@@ -207,6 +207,38 @@ _Dear Pierrepont:_ The cashier has just handed me your expense account.
 """
 
 
+KEMPTON_WACE_STYLE_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK THE KEMPTON-WACE LETTERS ***
+
+THE KEMPTON-WACE LETTERS
+
+I
+
+FROM DANE KEMPTON TO HERBERT WACE
+
+LONDON,
+
+3 A QUEEN'S ROAD, CHELSEA, S.W.
+
+August 14, 19--.
+
+Yesterday I wrote formally.
+
+II
+
+FROM HERBERT WACE TO DANE KEMPTON
+
+THE RIDGE,
+
+BERKELEY, CALIFORNIA.
+
+September 3, 19--.
+
+I have delayed too long.
+
+*** END OF THE PROJECT GUTENBERG EBOOK THE KEMPTON-WACE LETTERS ***
+"""
+
+
 EVELINA_STYLE_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK EVELINA SAMPLE ***
 
 THE HISTORY OF EVELINA
@@ -502,6 +534,22 @@ def test_parse_gutenberg_epistolary_supports_self_made_merchant_style_roman_lett
     assert sections[1].body == ["The cashier has just handed me your expense account."]
 
 
+def test_parse_gutenberg_epistolary_supports_kempton_wace_style_roman_from_headers(tmp_path: Path) -> None:
+    source = tmp_path / "kempton-wace-sample.txt"
+    source.write_text(KEMPTON_WACE_STYLE_TEXT, encoding="utf-8")
+
+    sections = parse_gutenberg_epistolary(source, "The Kempton-Wace Letters")
+
+    assert [section.id for section in sections] == ["letter-i", "letter-ii"]
+    assert [section.label for section in sections] == ["Letter I", "Letter II"]
+    assert sections[0].title == "FROM DANE KEMPTON TO HERBERT WACE"
+    assert sections[0].subtitle == "LONDON, 3 A QUEEN'S ROAD, CHELSEA, S.W. August 14, 19--."
+    assert sections[0].body == ["Yesterday I wrote formally."]
+    assert sections[1].title == "FROM HERBERT WACE TO DANE KEMPTON"
+    assert sections[1].subtitle == "THE RIDGE, BERKELEY, CALIFORNIA. September 3, 19--."
+    assert sections[1].body == ["I have delayed too long."]
+
+
 def test_parse_gutenberg_epistolary_supports_evelina_style_mixed_case_headers(tmp_path: Path) -> None:
     source = tmp_path / "evelina-sample.txt"
     source.write_text(EVELINA_STYLE_TEXT, encoding="utf-8")
@@ -753,6 +801,61 @@ theme: classic-paper
     assert (output_dir / "books" / "self-made-merchant-sample" / "index.html").exists()
     assert (output_dir / "books" / "self-made-merchant-sample" / "letter-i.html").exists()
     assert (output_dir / "books" / "self-made-merchant-sample" / "letter-ii.html").exists()
+
+
+def test_build_library_supports_kempton_wace_style_epistolary_book(tmp_path: Path) -> None:
+    content_root = tmp_path / "library"
+    books_dir = content_root / "books"
+    kempton_dir = books_dir / "kempton-wace-letters"
+    sample_dir = books_dir / "sample-letters"
+    kempton_dir.mkdir(parents=True)
+    sample_dir.mkdir(parents=True)
+
+    (content_root / "library.yaml").write_text(
+        """title: Kempton-Wace Library
+books_dir: books
+output_dir: dist
+""",
+        encoding="utf-8",
+    )
+    (kempton_dir / "book.yaml").write_text(
+        """id: kempton-wace-letters
+title: The Kempton-Wace Letters
+author: Jack London; Anna Strunsky
+year: \"1903\"
+source_file: source.txt
+source_format: gutenberg-txt
+profile: epistolary
+parser: gutenberg-letters-v1
+theme: classic-paper
+""",
+        encoding="utf-8",
+    )
+    (kempton_dir / "source.txt").write_text(KEMPTON_WACE_STYLE_TEXT, encoding="utf-8")
+
+    (sample_dir / "book.yaml").write_text(
+        """id: sample-letters
+title: Sample Letters
+author: Test Author
+year: \"1901\"
+source_file: source.txt
+source_format: gutenberg-txt
+profile: epistolary
+parser: gutenberg-letters-v1
+theme: classic-paper
+""",
+        encoding="utf-8",
+    )
+    (sample_dir / "source.txt").write_text(SAMPLE_LETTERS_TEXT, encoding="utf-8")
+
+    output_dir = build_library(content_root)
+
+    assert (output_dir / "index.html").exists()
+    assert (output_dir / "books" / "kempton-wace-letters" / "index.html").exists()
+    assert (output_dir / "books" / "kempton-wace-letters" / "letter-i.html").exists()
+    assert (output_dir / "books" / "kempton-wace-letters" / "letter-ii.html").exists()
+    assert (output_dir / "books" / "sample-letters" / "letter-i.html").exists()
+    assert (output_dir / "books" / "sample-letters" / "letter-ii.html").exists()
 
 
 def test_build_library_supports_evelina_style_epistolary_book(tmp_path: Path) -> None:

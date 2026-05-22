@@ -17,6 +17,7 @@ Both profiles currently support these source formats:
 
 The `epistolary` parser now handles these Gutenberg heading patterns:
 - Roman-numeral sections with italic `_From ... to ..._` correspondent lines
+- Roman-numeral sections with uppercase correspondent lines like `FROM DANE KEMPTON TO HERBERT WACE`, followed by location/date metadata lines
 - Roman-numeral sections with a dateline followed by an italicized salutation paragraph like `_Dear Pierrepont:_ ...`
 - direct `To ...` letter headers
 - Clarissa-style `LETTER I` headings followed by an uppercase correspondent line containing ` TO `

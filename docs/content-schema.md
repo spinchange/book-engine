@@ -60,6 +60,7 @@ Expected source structure:
 - either Project Gutenberg header/footer markers (`gutenberg-txt`) or already-normalized plain text (`plain-txt`)
 - one of these heading grammars:
   - section headings as Roman numerals (`I`, `II`, ...`) with a following italicized sender/recipient line such as `_From A. to B._`
+  - section headings as Roman numerals (`I`, `II`, ...`) with an uppercase correspondent line such as `FROM DANE KEMPTON TO HERBERT WACE`, followed by location/date metadata lines
   - section headings as Roman numerals (`I`, `II`, ...`) with a dateline paragraph followed by an italicized salutation paragraph such as `_Dear Pierrepont:_ ...`
   - direct `To ...` letter headers followed by the salutation/body
   - standalone `LETTER I`, `LETTER II`, etc. followed by an uppercase correspondent line containing ` TO `

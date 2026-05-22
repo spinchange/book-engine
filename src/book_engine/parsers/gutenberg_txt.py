@@ -49,7 +49,9 @@ def _looks_like_roman_epistolary_heading(lines: list[str], index: int) -> bool:
     tail = [ln.strip() for ln in lines[index + 1 : index + 6] if ln.strip()]
     if tail and tail[0].startswith("_"):
         return True
-    return len(tail) >= 2 and _looks_like_date_line(tail[0]) and bool(_split_italic_salutation_paragraph(tail[1]))
+    if len(tail) >= 2 and _looks_like_date_line(tail[0]) and bool(_split_italic_salutation_paragraph(tail[1])):
+        return True
+    return _looks_like_correspondent_header(tail)
 
 
 def _looks_like_to_line_heading(lines: list[str], index: int) -> bool:
@@ -98,6 +100,29 @@ def _looks_like_date_line(line: str) -> bool:
         "SUNDAY",
     }
     return any(token in header for token in month_tokens) and any(ch.isdigit() for ch in header)
+
+
+def _looks_like_brief_dateline_line(line: str) -> bool:
+    header = re.sub(r"\s+", " ", line.strip())
+    if not header:
+        return False
+    if _looks_like_date_line(header):
+        return True
+    upper = header.upper().rstrip(".,;:!?")
+    weekday_prefixes = (
+        "MONDAY",
+        "TUESDAY",
+        "WEDNESDAY",
+        "THURSDAY",
+        "FRIDAY",
+        "SATURDAY",
+        "SUNDAY",
+    )
+    if upper.startswith(weekday_prefixes):
+        return True
+    if len(header) <= 80 and _is_uppercaseish(header):
+        return True
+    return False
 
 
 
@@ -466,6 +491,15 @@ def parse_gutenberg_epistolary(
                 subtitle = body[0] if body and len(body[0]) < 80 else ""
                 if subtitle:
                     body = body[1:]
+            elif paras and _looks_like_correspondent_header(paras[:3]):
+                title_text = paras[0]
+                subtitle_parts: list[str] = []
+                body_start = 1
+                while body_start < len(paras) and _looks_like_brief_dateline_line(paras[body_start]):
+                    subtitle_parts.append(paras[body_start])
+                    body_start += 1
+                subtitle = " ".join(subtitle_parts)
+                body = paras[body_start:]
             elif len(paras) >= 2 and _looks_like_date_line(paras[0]):
                 salutation_split = _split_italic_salutation_paragraph(paras[1])
                 if salutation_split:
