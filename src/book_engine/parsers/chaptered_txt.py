@@ -55,18 +55,18 @@ def _paragraphize(raw_body: str) -> list[str]:
 
 def _parse_heading(line: str) -> tuple[str, str, str, bool] | None:
     stripped = line.strip()
-    upper = stripped.upper()
 
-    for prefix, kind, readable_prefix in (
-        ("CHAPTER ", "chapter", "Chapter"),
-        ("BOOK ", "book", "Book"),
-        ("PART ", "part", "Part"),
-        ("LETTER ", "letter", "Letter"),
+    for prefix, title_prefix, kind, readable_prefix in (
+        ("CHAPTER ", "Chapter ", "chapter", "Chapter"),
+        ("BOOK ", "Book ", "book", "Book"),
+        ("PART ", "Part ", "part", "Part"),
+        ("LETTER ", "Letter ", "letter", "Letter"),
     ):
-        if not upper.startswith(prefix):
+        if not (stripped.startswith(prefix) or stripped.startswith(title_prefix)):
             continue
 
-        remainder = stripped[len(prefix) :]
+        matched_prefix = prefix if stripped.startswith(prefix) else title_prefix
+        remainder = stripped[len(matched_prefix) :]
         match = re.match(r"([IVXLCDM]+|\d+)(.*)$", remainder, re.IGNORECASE)
         if not match:
             return None
@@ -74,10 +74,10 @@ def _parse_heading(line: str) -> tuple[str, str, str, bool] | None:
         numeral = match.group(1).upper()
         trailing = match.group(2).strip()
         inline_title = trailing.lstrip(".:-— ").strip()
-        title_from_following_block = stripped[: len(prefix)].isupper()
+        title_from_following_block = matched_prefix.isupper()
         return kind, f"{readable_prefix} {numeral}", inline_title, title_from_following_block
 
-    if upper.startswith("CHAPITRE "):
+    if stripped.startswith("CHAPITRE "):
         remainder = stripped[len("CHAPITRE ") :]
         match = re.match(r"(PREMIER|[IVXLCDM]+|\d+)(.*)$", remainder, re.IGNORECASE)
         if not match:
@@ -155,7 +155,7 @@ def _looks_like_body_opening_paragraph(text: str, line_count: int = 1) -> bool:
 
 def _looks_like_short_chapter_title(text: str) -> bool:
     cleaned = text.strip()
-    if not cleaned or cleaned.endswith((".", "!", "?")):
+    if not cleaned or cleaned.endswith((".", "!", "?", ":")):
         return False
     words = cleaned.split()
     if len(words) > 8:
@@ -163,7 +163,19 @@ def _looks_like_short_chapter_title(text: str) -> bool:
     alpha_words = [word for word in words if any(ch.isalpha() for ch in word)]
     if not alpha_words:
         return False
-    return all(next((ch for ch in word if ch.isalpha()), "").isupper() for word in alpha_words)
+    connector_words = {"a", "an", "and", "as", "at", "by", "for", "from", "in", "of", "on", "or", "the", "to", "with"}
+    saw_titlecase_word = False
+    for word in alpha_words:
+        first_alpha = next((ch for ch in word if ch.isalpha()), "")
+        if not first_alpha:
+            continue
+        if first_alpha.isupper():
+            saw_titlecase_word = True
+            continue
+        if word.casefold() in connector_words:
+            continue
+        return False
+    return saw_titlecase_word
 
 
 def _normalize_heading_comparison(text: str) -> str:
@@ -317,12 +329,8 @@ def parse_chaptered_text(
         elif kind == "part":
             while chunk_lines and not chunk_lines[0].strip():
                 chunk_lines.pop(0)
-            sparse_wrapped_title = _consume_sparse_wrapped_title_block(chunk_lines)
-            if sparse_wrapped_title is not None:
-                title_parts, chunk_lines = sparse_wrapped_title
-            elif chunk_lines and chunk_lines[0].strip():
-                while chunk_lines and chunk_lines[0].strip():
-                    title_parts.append(chunk_lines.pop(0).strip())
+            if chunk_lines and _looks_like_short_chapter_title(chunk_lines[0].strip()):
+                title_parts.append(chunk_lines.pop(0).strip())
                 while chunk_lines and not chunk_lines[0].strip():
                     chunk_lines.pop(0)
         elif kind == "letter":

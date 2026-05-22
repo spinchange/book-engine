@@ -216,6 +216,38 @@ At that time I was only twenty-four.
 *** END OF THE PROJECT GUTENBERG EBOOK NOTES FROM THE UNDERGROUND ***
 """
 
+HUNGER_PART_STYLE_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK HUNGER ***
+
+  Knut Hamsun
+
+  Since the death of Ibsen and Strindberg, Hamsun is undoubtedly the
+  foremost creative writer of the Scandinavian countries.
+
+  To the English-speaking world he has so far been made known only through
+  one short story and a volume of short stories. Yet among those who have
+  read him in the original or in German and French translations he has long
+  occupied a place far in advance of any one else writing in Danish.
+
+  part in Kareno's life: his wife Eline, and Teresita, who is one more
+
+Part I
+
+It was during the time I wandered about and starved in Christiania:
+Christiania, this singular city, from which no man departs without
+carrying away the traces of his sojourn there.
+
+I was lying awake in my attic and I heard a clock below strike six.
+
+book it is I am talking about. Her face changes colour, has now one,
+another section.
+
+Part II
+
+A few weeks later I was out one evening.
+
+*** END OF THE PROJECT GUTENBERG EBOOK HUNGER ***
+"""
+
 FRENCH_CHAPTERED_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK ADOLPHE ***
 
 CHAPITRE PREMIER
@@ -456,6 +488,24 @@ def test_parse_chaptered_text_supports_part_headings_with_titles(tmp_path: Path)
     ]
 
 
+def test_parse_chaptered_text_does_not_treat_inline_part_or_book_words_as_headings(tmp_path: Path) -> None:
+    source = tmp_path / "hunger-sample.txt"
+    source.write_text(HUNGER_PART_STYLE_TEXT, encoding="utf-8")
+
+    sections = parse_chaptered_text(source, "Hunger")
+
+    assert [section.id for section in sections] == ["part-i", "part-ii"]
+    assert [section.label for section in sections] == ["Part I", "Part II"]
+    assert sections[0].title == "Part I"
+    assert sections[0].body == [
+        "It was during the time I wandered about and starved in Christiania: Christiania, this singular city, from which no man departs without carrying away the traces of his sojourn there.",
+        "I was lying awake in my attic and I heard a clock below strike six.",
+        "book it is I am talking about. Her face changes colour, has now one, another section.",
+    ]
+    assert sections[1].title == "Part II"
+    assert sections[1].body == ["A few weeks later I was out one evening."]
+
+
 def test_parse_chaptered_text_supports_french_chapter_and_appendix_headings(tmp_path: Path) -> None:
     source = tmp_path / "adolphe-sample.txt"
     source.write_text(FRENCH_CHAPTERED_TEXT, encoding="utf-8")
@@ -675,6 +725,48 @@ theme: classic-paper
     book_i_html = (output_dir / "books" / "werther" / "book-i.html").read_text(encoding="utf-8")
     assert '<h2 class="letter-title">Book I</h2>' in book_i_html
     assert '<div class="letter-label">Book I</div>' not in book_i_html
+
+
+def test_build_library_does_not_emit_spurious_book_pages_from_inline_prose(tmp_path: Path) -> None:
+    content_root = tmp_path / "library"
+    books_dir = content_root / "books"
+    hunger_dir = books_dir / "hunger"
+    hunger_dir.mkdir(parents=True)
+
+    (content_root / "library.yaml").write_text(
+        """title: Mixed Library
+books_dir: books
+output_dir: dist
+""",
+        encoding="utf-8",
+    )
+    (hunger_dir / "book.yaml").write_text(
+        """id: hunger
+title: Hunger
+author: Knut Hamsun
+year: \"1890\"
+source_file: source.txt
+source_format: gutenberg-txt
+profile: chaptered
+parser: gutenberg-chapters-v1
+theme: classic-paper
+""",
+        encoding="utf-8",
+    )
+    (hunger_dir / "source.txt").write_text(HUNGER_PART_STYLE_TEXT, encoding="utf-8")
+
+    output_dir = build_library(content_root)
+
+    assert (output_dir / "books" / "hunger" / "part-i.html").exists()
+    assert (output_dir / "books" / "hunger" / "part-ii.html").exists()
+    assert not (output_dir / "books" / "hunger" / "book-i.html").exists()
+
+    toc_html = (output_dir / "books" / "hunger" / "index.html").read_text(encoding="utf-8")
+    assert "part-i.html" in toc_html
+    assert "part-ii.html" in toc_html
+    assert "book-i.html" not in toc_html
+    assert '<span class="toc-kicker">Part I</span><span class="toc-title">Part I</span>' not in toc_html
+    assert "It was during the time I wandered about and starved in Christiania" not in toc_html
 
 
 def test_build_library_supports_frankenstein_style_mixed_letter_and_chapter_sections(tmp_path: Path) -> None:
