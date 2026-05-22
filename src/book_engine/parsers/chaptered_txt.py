@@ -166,6 +166,28 @@ def _looks_like_short_chapter_title(text: str) -> bool:
     return all(next((ch for ch in word if ch.isalpha()), "").isupper() for word in alpha_words)
 
 
+def _normalize_heading_comparison(text: str) -> str:
+    normalized = unicodedata.normalize("NFKD", text)
+    return "".join(ch.casefold() for ch in normalized if ch.isalnum())
+
+
+def _consume_repeated_documentary_heading(chunk_lines: list[str], title_text: str) -> list[str]:
+    probe_index = 0
+    while probe_index < len(chunk_lines) and not chunk_lines[probe_index].strip():
+        probe_index += 1
+    if probe_index >= len(chunk_lines):
+        return chunk_lines
+
+    candidate = chunk_lines[probe_index].strip().strip("_")
+    if _normalize_heading_comparison(candidate) != _normalize_heading_comparison(title_text):
+        return chunk_lines
+
+    remainder = chunk_lines[probe_index + 1 :]
+    while remainder and not remainder[0].strip():
+        remainder.pop(0)
+    return remainder
+
+
 def _collect_wrapped_heading_title(lines: list[str], start_index: int, inline_title: str) -> str:
     title_parts: list[str] = []
     if inline_title:
@@ -326,6 +348,10 @@ def parse_chaptered_text(
             section_id = _slugify_label(label)
             readable_label = f"Chapter {label.split(maxsplit=1)[1]}"
             title_line = re.sub(r"\s+", " ", " ".join(title_parts)).strip() or readable_label
+            if label in toc_titles:
+                chunk_lines = _consume_repeated_documentary_heading(chunk_lines, title_line)
+                raw_body = "\n".join(chunk_lines).strip()
+                body = _paragraphize(raw_body)
         elif kind == "chapitre":
             section_id = _slugify_label(label)
             readable_label = label

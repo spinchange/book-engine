@@ -266,6 +266,32 @@ From my infancy I was imbued with high hopes and a lofty ambition.
 *** END OF THE PROJECT GUTENBERG EBOOK FRANKENSTEIN; OR, THE MODERN PROMETHEUS ***
 """
 
+DRACULA_DOCUMENTARY_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK DRACULA ***
+
+Contents
+
+CHAPTER I. Jonathan Harker’s Journal
+CHAPTER II. Mina Murray’s Journal
+
+DRACULA
+
+CHAPTER I
+
+JONATHAN HARKER’S JOURNAL
+
+(_Kept in shorthand._)
+
+_3 May. Bistritz._--Left Munich.
+
+CHAPTER II
+
+MINA MURRAY’S JOURNAL
+
+_24 September._--A second body paragraph.
+
+*** END OF THE PROJECT GUTENBERG EBOOK DRACULA ***
+"""
+
 
 def test_parse_chaptered_text_splits_chapters_and_paragraphs(tmp_path: Path) -> None:
     source = tmp_path / "sample.txt"
@@ -478,6 +504,19 @@ def test_parse_chaptered_text_supports_frankenstein_letter_and_title_case_chapte
     assert sections[2].body == [
         "From my infancy I was imbued with high hopes and a lofty ambition."
     ]
+
+
+def test_parse_chaptered_text_omits_repeated_documentary_body_headings_when_toc_supplies_title(tmp_path: Path) -> None:
+    source = tmp_path / "dracula-documentary.txt"
+    source.write_text(DRACULA_DOCUMENTARY_TEXT, encoding="utf-8")
+
+    sections = parse_chaptered_text(source, "Dracula")
+
+    assert [section.id for section in sections] == ["chapter-i", "chapter-ii"]
+    assert sections[0].title == "Jonathan Harker’s Journal"
+    assert sections[0].body == ["(_Kept in shorthand._)", "_3 May. Bistritz._--Left Munich."]
+    assert sections[1].title == "Mina Murray’s Journal"
+    assert sections[1].body == ["_24 September._--A second body paragraph."]
 
 
 def test_build_library_supports_chaptered_and_epistolary_books(tmp_path: Path) -> None:
