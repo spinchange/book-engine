@@ -187,6 +187,45 @@ Let me write, and bewail my miserable hard fate.
 """
 
 
+FANNY_HILL_STYLE_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK FANNY HILL SAMPLE ***
+
+Contents
+
+ LETTER THE FIRST
+ LETTER THE SECOND
+
+LETTER THE FIRST
+
+Madam,
+
+I sit down to give you an undeniable proof of my considering your
+
+desires as indispensable orders. Ungracious then as the task may be, I
+
+shall recall to view those scandalous stages of my life.
+
+
+
+Hating, as I mortally do, all long unnecessary prefaces, I shall give
+
+you good quarter in this.
+
+LETTER THE SECOND
+
+Madam,
+
+If I have delayed the sequel of my history, it has been purely to allow
+
+myself a little breathing time.
+
+
+
+I imagined, indeed, that you would have been cloyed and tired.
+
+*** END OF THE PROJECT GUTENBERG EBOOK FANNY HILL SAMPLE ***
+"""
+
+
 SELF_MADE_MERCHANT_STYLE_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK LETTERS FROM A SELF-MADE MERCHANT TO HIS SON ***
 
 LETTERS _from a_ SELF-MADE MERCHANT _to his_ SON
@@ -518,6 +557,28 @@ def test_parse_gutenberg_epistolary_supports_pamela_style_letter_headings(tmp_pa
     assert sections[3].body == ["Let me write, and bewail my miserable hard fate."]
 
 
+def test_parse_gutenberg_epistolary_supports_fanny_hill_style_spelled_letter_ordinals(tmp_path: Path) -> None:
+    source = tmp_path / "fanny-hill-sample.txt"
+    source.write_text(FANNY_HILL_STYLE_TEXT, encoding="utf-8")
+
+    sections = parse_gutenberg_epistolary(source, "Fanny Hill Sample")
+
+    assert [section.id for section in sections] == ["letter-i", "letter-ii"]
+    assert [section.label for section in sections] == ["Letter I", "Letter II"]
+    assert sections[0].title == "Madam,"
+    assert sections[0].subtitle == ""
+    assert sections[0].body == [
+        "I sit down to give you an undeniable proof of my considering your desires as indispensable orders. Ungracious then as the task may be, I shall recall to view those scandalous stages of my life.",
+        "Hating, as I mortally do, all long unnecessary prefaces, I shall give you good quarter in this.",
+    ]
+    assert sections[1].title == "Madam,"
+    assert sections[1].subtitle == ""
+    assert sections[1].body == [
+        "If I have delayed the sequel of my history, it has been purely to allow myself a little breathing time.",
+        "I imagined, indeed, that you would have been cloyed and tired.",
+    ]
+
+
 def test_parse_gutenberg_epistolary_supports_self_made_merchant_style_roman_letters(tmp_path: Path) -> None:
     source = tmp_path / "self-made-merchant-sample.txt"
     source.write_text(SELF_MADE_MERCHANT_STYLE_TEXT, encoding="utf-8")
@@ -765,6 +826,42 @@ theme: classic-paper
     assert (output_dir / "books" / "pamela-sample" / "letter-ii.html").exists()
     assert (output_dir / "books" / "pamela-sample" / "letter-iii.html").exists()
     assert (output_dir / "books" / "pamela-sample" / "letter-iv.html").exists()
+
+
+def test_build_library_supports_fanny_hill_style_epistolary_book(tmp_path: Path) -> None:
+    content_root = tmp_path / "library"
+    books_dir = content_root / "books"
+    book_dir = books_dir / "fanny-hill-sample"
+    book_dir.mkdir(parents=True)
+
+    (content_root / "library.yaml").write_text(
+        """title: Fanny Hill Library
+books_dir: books
+output_dir: dist
+""",
+        encoding="utf-8",
+    )
+    (book_dir / "book.yaml").write_text(
+        """id: fanny-hill-sample
+title: Fanny Hill Sample
+author: John Cleland
+year: \"1749\"
+source_file: source.txt
+source_format: gutenberg-txt
+profile: epistolary
+parser: gutenberg-letters-v1
+theme: classic-paper
+""",
+        encoding="utf-8",
+    )
+    (book_dir / "source.txt").write_text(FANNY_HILL_STYLE_TEXT, encoding="utf-8")
+
+    output_dir = build_library(content_root)
+
+    assert (output_dir / "index.html").exists()
+    assert (output_dir / "books" / "fanny-hill-sample" / "index.html").exists()
+    assert (output_dir / "books" / "fanny-hill-sample" / "letter-i.html").exists()
+    assert (output_dir / "books" / "fanny-hill-sample" / "letter-ii.html").exists()
 
 
 def test_build_library_supports_self_made_merchant_style_epistolary_book(tmp_path: Path) -> None:

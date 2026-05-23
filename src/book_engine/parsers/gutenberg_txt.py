@@ -35,12 +35,48 @@ def extract_source_main_text(text: str, title: str, source_format: str = "gutenb
 
 
 def _paragraphize(raw_body: str) -> list[str]:
+    lines = raw_body.split("\n")
+    blank_runs_between_content: list[int] = []
+    seen_content = False
+    blank_run = 0
+    for line in lines:
+        if line.strip():
+            if seen_content and blank_run > 0:
+                blank_runs_between_content.append(blank_run)
+            seen_content = True
+            blank_run = 0
+        else:
+            blank_run += 1
+
+    sparse_wrapped_mode = (
+        any(run >= 2 for run in blank_runs_between_content)
+        and sum(1 for run in blank_runs_between_content if run == 1)
+        > sum(1 for run in blank_runs_between_content if run >= 2)
+    )
+
+    if not sparse_wrapped_mode:
+        return [
+            re.sub(r"\s+", " ", part.strip())
+            for part in re.split(r"\n\s*\n", raw_body)
+            if part.strip()
+        ]
+
     paras: list[str] = []
-    for part in re.split(r"\n\s*\n", raw_body):
-        p = re.sub(r"\s+", " ", part.strip())
-        if p:
-            paras.append(p)
-    return paras
+    current_lines: list[str] = []
+    blank_run = 0
+    for line in lines:
+        stripped = line.strip()
+        if stripped:
+            if blank_run >= 2 and current_lines:
+                paras.append(" ".join(current_lines))
+                current_lines = []
+            current_lines.append(stripped)
+            blank_run = 0
+        else:
+            blank_run += 1
+    if current_lines:
+        paras.append(" ".join(current_lines))
+    return [re.sub(r"\s+", " ", paragraph).strip() for paragraph in paras if paragraph.strip()]
 
 
 def _looks_like_roman_epistolary_heading(lines: list[str], index: int) -> bool:
@@ -127,10 +163,12 @@ def _looks_like_brief_dateline_line(line: str) -> bool:
 
 
 def _looks_like_salutation_line(line: str) -> bool:
-    header = line.strip()
+    header = re.sub(r"\s+", " ", line.strip())
     upper = header.upper()
     if not header.endswith((",", "!")):
         return False
+    if upper in {"MADAM,", "MADAM!", "SIR,", "SIR!"}:
+        return True
     salutation_prefixes = (
         "DEAR ",
         "MY DEAR ",
@@ -138,7 +176,7 @@ def _looks_like_salutation_line(line: str) -> bool:
         "O MY DEAR ",
         "O MY DEAREST ",
     )
-    return _is_uppercaseish(header) and upper.startswith(salutation_prefixes)
+    return upper.startswith(salutation_prefixes) and (_is_uppercaseish(header) or header[0].isupper())
 
 
 ITALIC_SALUTATION_WITH_BODY_RE = re.compile(r"^_(.+?:)_\s*(.*)$")
@@ -151,6 +189,19 @@ def _split_italic_salutation_paragraph(paragraph: str) -> tuple[str, str] | None
     title = match.group(1).strip()
     remainder = match.group(2).strip()
     return title, remainder
+
+
+def _split_plain_salutation_paragraph(paragraph: str) -> tuple[str, str] | None:
+    stripped = re.sub(r"\s+", " ", paragraph.strip())
+    for marker in (",", "!"):
+        split_at = stripped.find(marker)
+        if split_at == -1:
+            continue
+        title = stripped[: split_at + 1].strip()
+        remainder = stripped[split_at + 1 :].strip()
+        if remainder and _looks_like_salutation_line(title):
+            return title, remainder
+    return None
 
 
 
@@ -224,7 +275,37 @@ def _looks_like_italic_correspondent_header(line: str) -> bool:
     return bool(left and right and left[0].isupper() and any(ch.isalpha() for ch in right) and right[0].isupper())
 
 
-LETTER_HEADING_RE = re.compile(r"LETTER\s+([IVXLCDM]+)\.?(?:\s+(.*))?$", re.IGNORECASE)
+LETTER_HEADING_RE = re.compile(r"LETTER\s+([IVXLCDM]+|THE\s+[A-Z-]+)\.?(?:\s+(.*))?$", re.IGNORECASE)
+
+SPELLED_ORDINAL_TO_ROMAN = {
+    "THE FIRST": "I",
+    "THE SECOND": "II",
+    "THE THIRD": "III",
+    "THE FOURTH": "IV",
+    "THE FIFTH": "V",
+    "THE SIXTH": "VI",
+    "THE SEVENTH": "VII",
+    "THE EIGHTH": "VIII",
+    "THE NINTH": "IX",
+    "THE TENTH": "X",
+    "THE ELEVENTH": "XI",
+    "THE TWELFTH": "XII",
+    "THE THIRTEENTH": "XIII",
+    "THE FOURTEENTH": "XIV",
+    "THE FIFTEENTH": "XV",
+    "THE SIXTEENTH": "XVI",
+    "THE SEVENTEENTH": "XVII",
+    "THE EIGHTEENTH": "XVIII",
+    "THE NINETEENTH": "XIX",
+    "THE TWENTIETH": "XX",
+}
+
+
+def _normalize_letter_heading_label(raw_label: str) -> str | None:
+    normalized = re.sub(r"\s+", " ", raw_label.strip()).upper()
+    if re.fullmatch(r"[IVXLCDM]+", normalized):
+        return normalized
+    return SPELLED_ORDINAL_TO_ROMAN.get(normalized)
 
 
 def _parse_letter_heading_line(line: str) -> tuple[str, str, str] | None:
@@ -236,7 +317,9 @@ def _parse_letter_heading_line(line: str) -> tuple[str, str, str] | None:
     if not match:
         return None
 
-    label = match.group(1)
+    label = _normalize_letter_heading_label(match.group(1))
+    if not label:
+        return None
     remainder = (match.group(2) or "").strip()
     if not remainder:
         return label, "", ""
@@ -395,6 +478,11 @@ def _split_letter_heading_paragraphs(
     body_start = 1
     subtitle = ""
     body_prefix: list[str] = []
+
+    plain_salutation_split = _split_plain_salutation_paragraph(title_text)
+    if plain_salutation_split:
+        title_text, inline_body = plain_salutation_split
+        body_prefix.append(inline_body)
 
     if len(paras) > 1 and (
         paras[1].upper().startswith("[IN ") or paras[1].upper().startswith("[ENCLOSED ")
