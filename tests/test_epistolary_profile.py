@@ -29,6 +29,85 @@ The waters seem to agree with my uncle.
 """
 
 
+EMILY_MONTAGUE_STYLE_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK THE HISTORY OF EMILY MONTAGUE ***
+
+THE HISTORY OF EMILY MONTAGUE.
+
+LETTER 1.
+
+To John Temple, Esq; at Paris.
+
+Cowes, April 10, 1766.
+
+After spending two or three very agreeable days here.
+
+LETTER 2.
+
+To Miss Rivers, Clarges Street.
+
+Quebec, June 27.
+
+I have this moment your letter, my dear.
+
+*** END OF THE PROJECT GUTENBERG EBOOK THE HISTORY OF EMILY MONTAGUE ***
+"""
+
+
+EMILY_MONTAGUE_EDGE_CASES_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK THE HISTORY OF EMILY MONTAGUE ***
+
+THE HISTORY OF EMILY MONTAGUE.
+
+LETTER 10.
+
+Silleri, August 24.
+
+I have been a month arrived, my dear.
+
+LETTER 12.
+
+To Miss Rivers, Clarges Street.
+
+Quebec, Sept. 12.
+
+I yesterday morning received a letter from Major Melmoth, to
+introduce to my acquaintance Sir George Clayton, who brought it.
+
+I am going with him this afternoon to visit Miss Fermor.
+
+
+
+Eight in the evening. We are return'd: I every hour like him less.
+
+LETTER 72.
+
+To the Earl of ----.
+
+My Lord,
+
+Silleri, Feb. 20.
+
+Your Lordship does me great honor.
+
+LETTER 228.
+
+To Mrs. Fitzgerald.
+
+Bellfield, Tuesday.
+
+I accept your challenge, Bell; and am greatly mistaken.
+
+Have no fear of falling into vegetation.
+
+
+
+THE END.
+
+End of Project Gutenberg's The History of Emily Montague, by Frances Brooke
+
+*** END OF THE PROJECT GUTENBERG EBOOK THE HISTORY OF EMILY MONTAGUE ***
+"""
+
+
 SAMPLE_LETTERS_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK SAMPLE LETTERS ***
 
 I
@@ -472,6 +551,50 @@ def test_parse_gutenberg_epistolary_supports_to_line_letters(tmp_path: Path) -> 
     assert sections[1].body == [
         "We are all arrived safely.",
         "The waters seem to agree with my uncle.",
+    ]
+
+
+def test_parse_gutenberg_epistolary_supports_numeric_letter_headings_with_to_lines(tmp_path: Path) -> None:
+    source = tmp_path / "emily-montague-sample.txt"
+    source.write_text(EMILY_MONTAGUE_STYLE_TEXT, encoding="utf-8")
+
+    sections = parse_gutenberg_epistolary(source, "The History of Emily Montague")
+
+    assert [section.id for section in sections] == ["letter-1", "letter-2"]
+    assert [section.label for section in sections] == ["Letter 1", "Letter 2"]
+    assert sections[0].title == "To John Temple, Esq; at Paris."
+    assert sections[0].subtitle == "Cowes, April 10, 1766."
+    assert sections[0].body == ["After spending two or three very agreeable days here."]
+    assert sections[1].title == "To Miss Rivers, Clarges Street."
+    assert sections[1].subtitle == "Quebec, June 27."
+    assert sections[1].body == ["I have this moment your letter, my dear."]
+
+
+def test_parse_gutenberg_epistolary_handles_emily_montague_date_only_and_lowercase_to_headers(tmp_path: Path) -> None:
+    source = tmp_path / "emily-montague-edge-sample.txt"
+    source.write_text(EMILY_MONTAGUE_EDGE_CASES_TEXT, encoding="utf-8")
+
+    sections = parse_gutenberg_epistolary(source, "The History of Emily Montague")
+
+    assert [section.id for section in sections] == ["letter-10", "letter-12", "letter-72", "letter-228"]
+    assert sections[0].title == "Letter 10"
+    assert sections[0].subtitle == "Silleri, August 24."
+    assert sections[0].body == ["I have been a month arrived, my dear."]
+    assert sections[1].title == "To Miss Rivers, Clarges Street."
+    assert sections[1].subtitle == "Quebec, Sept. 12."
+    assert sections[1].body == [
+        "I yesterday morning received a letter from Major Melmoth, to introduce to my acquaintance Sir George Clayton, who brought it.",
+        "I am going with him this afternoon to visit Miss Fermor.",
+        "Eight in the evening. We are return'd: I every hour like him less.",
+    ]
+    assert sections[2].title == "To the Earl of ----."
+    assert sections[2].subtitle == "My Lord, Silleri, Feb. 20."
+    assert sections[2].body == ["Your Lordship does me great honor."]
+    assert sections[3].title == "To Mrs. Fitzgerald."
+    assert sections[3].subtitle == "Bellfield, Tuesday."
+    assert sections[3].body == [
+        "I accept your challenge, Bell; and am greatly mistaken.",
+        "Have no fear of falling into vegetation.",
     ]
 
 

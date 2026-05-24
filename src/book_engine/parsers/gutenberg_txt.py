@@ -17,7 +17,20 @@ def extract_gutenberg_main_text(text: str, title: str) -> str:
     if start_marker in text and end_marker in text:
         start = text.index(start_marker) + len(start_marker)
         end = text.index(end_marker)
-        return text[start:end].strip()
+        body = text[start:end].strip()
+        body = re.sub(
+            r"\n+\s*THE END\.\s*\n+\s*End of Project Gutenberg's .*\Z",
+            "",
+            body,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        body = re.sub(
+            r"\n+\s*End of Project Gutenberg's .*\Z",
+            "",
+            body,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        return body.strip()
 
     generic_start = re.search(r"\*\*\* START OF THE PROJECT GUTENBERG EBOOK .*? \*\*\*", text)
     generic_end = re.search(r"\*\*\* END OF THE PROJECT GUTENBERG EBOOK .*? \*\*\*", text)
@@ -48,10 +61,39 @@ def _paragraphize(raw_body: str) -> list[str]:
         else:
             blank_run += 1
 
+    multi_blank_runs = sum(1 for run in blank_runs_between_content if run >= 2)
+    single_blank_runs = sum(1 for run in blank_runs_between_content if run == 1)
+    isolated_content_lines = 0
+    adjacent_content_pairs = 0
+    for index, line in enumerate(lines):
+        if not line.strip():
+            continue
+        prev_blank = index == 0 or not lines[index - 1].strip()
+        next_blank = index == len(lines) - 1 or not lines[index + 1].strip()
+        if prev_blank and next_blank:
+            isolated_content_lines += 1
+        if index + 1 < len(lines) and lines[index + 1].strip():
+            adjacent_content_pairs += 1
+    first_nonblank = [line.strip() for line in lines if line.strip()][:3]
+    starts_with_structured_letter_header = bool(first_nonblank) and (
+        (
+            first_nonblank[0].upper().startswith("TO ")
+            and len(first_nonblank) > 1
+            and _looks_like_date_line(first_nonblank[1])
+        )
+        or (
+            first_nonblank[0].upper().startswith("TO ")
+            and len(first_nonblank) > 2
+            and _looks_like_salutation_line(first_nonblank[1])
+            and _looks_like_letter_subtitle_line(first_nonblank[2])
+        )
+    )
     sparse_wrapped_mode = (
-        any(run >= 2 for run in blank_runs_between_content)
-        and sum(1 for run in blank_runs_between_content if run == 1)
-        > sum(1 for run in blank_runs_between_content if run >= 2)
+        multi_blank_runs >= 1
+        and single_blank_runs > multi_blank_runs
+        and isolated_content_lines >= 4
+        and isolated_content_lines > adjacent_content_pairs
+        and not starts_with_structured_letter_header
     )
 
     if not sparse_wrapped_mode:
@@ -161,13 +203,32 @@ def _looks_like_brief_dateline_line(line: str) -> bool:
     return False
 
 
+def _looks_like_letter_subtitle_line(line: str) -> bool:
+    if _looks_like_brief_dateline_line(line):
+        return True
+    header = re.sub(r"\s+", " ", line.strip())
+    if not header or len(header) > 80:
+        return False
+    upper = header.upper()
+    weekday_tokens = (
+        "MONDAY",
+        "TUESDAY",
+        "WEDNESDAY",
+        "THURSDAY",
+        "FRIDAY",
+        "SATURDAY",
+        "SUNDAY",
+    )
+    return "," in header and any(token in upper for token in weekday_tokens)
+
+
 
 def _looks_like_salutation_line(line: str) -> bool:
     header = re.sub(r"\s+", " ", line.strip())
     upper = header.upper()
     if not header.endswith((",", "!")):
         return False
-    if upper in {"MADAM,", "MADAM!", "SIR,", "SIR!"}:
+    if upper in {"MADAM,", "MADAM!", "SIR,", "SIR!", "MY LORD,", "MY LORD!"}:
         return True
     salutation_prefixes = (
         "DEAR ",
@@ -275,7 +336,7 @@ def _looks_like_italic_correspondent_header(line: str) -> bool:
     return bool(left and right and left[0].isupper() and any(ch.isalpha() for ch in right) and right[0].isupper())
 
 
-LETTER_HEADING_RE = re.compile(r"LETTER\s+([IVXLCDM]+|THE\s+[A-Z-]+)\.?(?:\s+(.*))?$", re.IGNORECASE)
+LETTER_HEADING_RE = re.compile(r"LETTER\s+([IVXLCDM]+|\d+|THE\s+[A-Z-]+)\.?(?:\s+(.*))?$", re.IGNORECASE)
 
 SPELLED_ORDINAL_TO_ROMAN = {
     "THE FIRST": "I",
@@ -304,6 +365,8 @@ SPELLED_ORDINAL_TO_ROMAN = {
 def _normalize_letter_heading_label(raw_label: str) -> str | None:
     normalized = re.sub(r"\s+", " ", raw_label.strip()).upper()
     if re.fullmatch(r"[IVXLCDM]+", normalized):
+        return normalized
+    if re.fullmatch(r"\d+", normalized):
         return normalized
     return SPELLED_ORDINAL_TO_ROMAN.get(normalized)
 
@@ -345,8 +408,25 @@ def _looks_like_correspondent_header(lines: list[str]) -> bool:
 
     first = lines[0].strip()
     first_upper = first.upper()
+    second = lines[1].strip() if len(lines) > 1 else ""
+    second_upper = second.upper()
+    third = lines[2].strip() if len(lines) > 2 else ""
+
+    direct_to_header = first_upper.startswith("TO ") and len(first) > 3 and first[3].isupper()
+    lowercase_to_header = (
+        first_upper.startswith("TO ")
+        and not direct_to_header
+        and first.endswith(".")
+        and bool(first[3:].strip())
+        and (
+            _looks_like_salutation_line(second)
+            or _looks_like_date_line(second)
+            or (_looks_like_salutation_line(second) and _looks_like_letter_subtitle_line(third))
+        )
+    )
     if (
-        (first_upper.startswith("TO ") and len(first) > 3 and first[3].isupper())
+        direct_to_header
+        or lowercase_to_header
         or first_upper.startswith("FROM ")
         or _looks_like_mixed_case_to_header(first)
         or _looks_like_italic_correspondent_header(first)
@@ -357,8 +437,6 @@ def _looks_like_correspondent_header(lines: list[str]) -> bool:
     ):
         return True
 
-    second = lines[1].strip() if len(lines) > 1 else ""
-    second_upper = second.upper()
     if _is_uppercaseish(first) and (
         second_upper.startswith("[IN ") or second_upper.startswith("[ENCLOSED ")
     ):
@@ -376,7 +454,6 @@ def _looks_like_correspondent_header(lines: list[str]) -> bool:
     if first_upper.startswith("[ENCLOSED ") and _looks_like_salutation_line(second):
         return True
 
-    third = lines[2].strip() if len(lines) > 2 else ""
     if _is_uppercaseish(first) and (
         second_upper.startswith("[IN ") or second_upper.startswith("[ENCLOSED ")
     ) and _looks_like_date_line(third):
@@ -430,7 +507,11 @@ def _looks_like_letter_heading(lines: list[str], index: int) -> bool:
         return True
 
     tail = [ln.strip() for ln in lines[index + 1 : index + 6] if ln.strip()]
-    return _looks_like_correspondent_header(tail) or _extract_global_correspondent_title(lines, index) is not None
+    return (
+        _looks_like_correspondent_header(tail)
+        or _extract_global_correspondent_title(lines, index) is not None
+        or bool(tail and _looks_like_date_line(tail[0]))
+    )
 
 
 def _find_letter_heading_start(lines: list[str]) -> int | None:
@@ -442,10 +523,10 @@ def _find_letter_heading_start(lines: list[str]) -> int | None:
         i for i, line in enumerate(lines) if line.strip().upper().startswith("THE HISTORY OF ")
     ]
     if history_markers:
-        marker = history_markers[-1]
-        for candidate in candidates:
-            if candidate > marker:
-                return candidate
+        for marker in history_markers:
+            for candidate in candidates:
+                if candidate > marker:
+                    return candidate
 
     return candidates[0]
 
@@ -472,6 +553,13 @@ def _split_letter_heading_paragraphs(
     if global_title and not _looks_like_correspondent_header(paras[:3]):
         return global_title, "", paras
 
+    if _looks_like_date_line(paras[0]) and not _looks_like_correspondent_header(paras[:3]):
+        split_date_paragraph = _split_leading_date_paragraph(paras[0])
+        if split_date_paragraph:
+            subtitle, inline_dated_body = split_date_paragraph
+            return global_title or f"Letter {fallback_label}", subtitle, [inline_dated_body] + paras[1:]
+        return global_title or f"Letter {fallback_label}", paras[0], paras[1:]
+
     title_text = paras[0]
     if _looks_like_italic_correspondent_header(title_text):
         title_text = _normalize_italic_correspondent_title(title_text)
@@ -494,7 +582,14 @@ def _split_letter_heading_paragraphs(
     if inline_body:
         body_prefix.append(inline_body)
 
-    if len(paras) > body_start and _looks_like_date_line(paras[body_start]):
+    if len(paras) > body_start and _looks_like_salutation_line(paras[body_start]):
+        if len(paras) > body_start + 1 and _looks_like_letter_subtitle_line(paras[body_start + 1]):
+            subtitle = f"{paras[body_start]} {paras[body_start + 1]}".strip()
+            body_start += 2
+        elif title_text.upper().startswith("[IN ") or title_text.upper().startswith("[ENCLOSED "):
+            subtitle = paras[body_start]
+            body_start += 1
+    elif len(paras) > body_start and _looks_like_letter_subtitle_line(paras[body_start]):
         split_date_paragraph = _split_leading_date_paragraph(paras[body_start])
         if split_date_paragraph:
             subtitle, inline_dated_body = split_date_paragraph
