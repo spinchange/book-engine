@@ -492,6 +492,39 @@ Could I have imagined this letter would reach you.
 """
 
 
+DANGEROUS_CONNECTIONS_STYLE_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK DANGEROUS CONNECTIONS SAMPLE ***
+
+Preface.
+
+The following letter, wrote to the victim of the profligate Valmont, is, in my opinion,
+alone sufficient to counterbalance the impression this same Valmont could make.
+
+LETTER CXXX.
+
+_Madame de_ Rosemonde, _to the Presidente de_ Tourvel.
+
+This prefatory excerpt should not become the first parsed section.
+
+DANGEROUS CONNECTIONS.
+
+LETTER I.
+
+Cecilia Volanges _to_ Sophia Carnay, _at the Convent of the Ursulines
+of ——._
+
+You see, my dear friend, I keep my word, and I may always be idle, if I please.[1]
+
+LETTER II.
+
+_The_ Marchioness de Merteuil _to the_ Viscount Valmont, _at the_
+_Castle of ——._
+
+Return, my dear Viscount, return!
+
+*** END OF THE PROJECT GUTENBERG EBOOK DANGEROUS CONNECTIONS SAMPLE ***
+"""
+
+
 DUPLICATE_LABELS_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK DUPLICATE LABELS SAMPLE ***
 
 Letter I. To Eloisa.
@@ -818,6 +851,22 @@ def test_parse_gutenberg_epistolary_supports_abelard_heloise_italic_corresponden
     assert sections[2].body == ["Could I have imagined this letter would reach you."]
 
 
+def test_parse_gutenberg_epistolary_skips_prefatory_letter_excerpt_and_supports_split_italic_correspondent_headers(tmp_path: Path) -> None:
+    source = tmp_path / "dangerous-connections-sample.txt"
+    source.write_text(DANGEROUS_CONNECTIONS_STYLE_TEXT, encoding="utf-8")
+
+    sections = parse_gutenberg_epistolary(source, "Dangerous Connections, v. 1, 2, 3, 4")
+
+    assert [section.id for section in sections] == ["letter-i", "letter-ii"]
+    assert [section.label for section in sections] == ["Letter I", "Letter II"]
+    assert sections[0].title == "Cecilia Volanges to Sophia Carnay, at the Convent of the Ursulines of ——."
+    assert sections[0].subtitle == ""
+    assert sections[0].body == ["You see, my dear friend, I keep my word, and I may always be idle, if I please.[1]"]
+    assert sections[1].title == "The Marchioness de Merteuil to the Viscount Valmont, at the Castle of ——."
+    assert sections[1].subtitle == ""
+    assert sections[1].body == ["Return, my dear Viscount, return!"]
+
+
 def test_parse_gutenberg_epistolary_disambiguates_duplicate_letter_ids(tmp_path: Path) -> None:
     source = tmp_path / "duplicate-labels.txt"
     source.write_text(DUPLICATE_LABELS_TEXT, encoding="utf-8")
@@ -1114,6 +1163,42 @@ theme: classic-paper
     assert (output_dir / "books" / "evelina-sample" / "letter-ii.html").exists()
     assert (output_dir / "books" / "evelina-sample" / "letter-iii.html").exists()
     assert (output_dir / "books" / "evelina-sample" / "letter-iv.html").exists()
+
+
+def test_build_library_supports_dangerous_connections_style_epistolary_book(tmp_path: Path) -> None:
+    content_root = tmp_path / "library"
+    books_dir = content_root / "books"
+    dangerous_dir = books_dir / "dangerous-connections-sample"
+    dangerous_dir.mkdir(parents=True)
+
+    (content_root / "library.yaml").write_text(
+        """title: Dangerous Connections Library
+books_dir: books
+output_dir: dist
+""",
+        encoding="utf-8",
+    )
+    (dangerous_dir / "book.yaml").write_text(
+        """id: dangerous-connections-sample
+title: Dangerous Connections, v. 1, 2, 3, 4
+author: Choderlos de Laclos
+year: \"1782\"
+source_file: source.txt
+source_format: gutenberg-txt
+profile: epistolary
+parser: gutenberg-letters-v1
+theme: classic-paper
+""",
+        encoding="utf-8",
+    )
+    (dangerous_dir / "source.txt").write_text(DANGEROUS_CONNECTIONS_STYLE_TEXT, encoding="utf-8")
+
+    output_dir = build_library(content_root)
+
+    assert (output_dir / "index.html").exists()
+    assert (output_dir / "books" / "dangerous-connections-sample" / "index.html").exists()
+    assert (output_dir / "books" / "dangerous-connections-sample" / "letter-i.html").exists()
+    assert (output_dir / "books" / "dangerous-connections-sample" / "letter-ii.html").exists()
 
 
 def test_build_library_supports_plain_text_epistolary_book(tmp_path: Path) -> None:

@@ -155,29 +155,14 @@ def _looks_like_date_line(line: str) -> bool:
     header = line.strip().upper()
     if not header:
         return False
-    month_tokens = {
-        "JAN",
-        "FEB",
-        "MAR",
-        "APR",
-        "MAY",
-        "JUN",
-        "JUL",
-        "AUG",
-        "SEP",
-        "SEPT",
-        "OCT",
-        "NOV",
-        "DEC",
-        "MONDAY",
-        "TUESDAY",
-        "WEDNESDAY",
-        "THURSDAY",
-        "FRIDAY",
-        "SATURDAY",
-        "SUNDAY",
-    }
-    return any(token in header for token in month_tokens) and any(ch.isdigit() for ch in header)
+    month_pattern = (
+        r"\b(?:JAN(?:UARY)?|FEB(?:RUARY)?|MAR(?:CH)?|APR(?:IL)?|MAY|JUN(?:E)?|JUL(?:Y)?|"
+        r"AUG(?:UST)?|SEP(?:T(?:EMBER)?)?|OCT(?:OBER)?|NOV(?:EMBER)?|DEC(?:EMBER)?)\b"
+    )
+    return bool(
+        re.search(month_pattern + r"[^\n]{0,20}\d", header)
+        or re.search(r"\d[^\n]{0,20}" + month_pattern, header)
+    )
 
 
 def _looks_like_brief_dateline_line(line: str) -> bool:
@@ -320,9 +305,19 @@ def _normalize_italic_correspondent_title(line: str) -> str:
     return re.sub(r"\s+", " ", title).strip()
 
 
+def _collapse_wrapped_correspondent_lines(lines: list[str]) -> list[str]:
+    normalized = [re.sub(r"\s+", " ", line.strip()) for line in lines if line.strip()]
+    if len(normalized) < 2:
+        return normalized
+    combined = re.sub(r"\s+", " ", f"{normalized[0]} {normalized[1]}").strip()
+    if _looks_like_italic_correspondent_header(combined) or _looks_like_mixed_case_to_header(combined):
+        return [combined] + normalized[2:]
+    return normalized
+
+
 def _looks_like_italic_correspondent_header(line: str) -> bool:
     stripped = line.strip()
-    if "_" not in stripped or " to " not in stripped.lower():
+    if "_" not in stripped:
         return False
     normalized = _normalize_italic_correspondent_title(stripped)
     upper = normalized.upper()
@@ -333,7 +328,8 @@ def _looks_like_italic_correspondent_header(line: str) -> bool:
     left, right = normalized.split(" to ", 1)
     left = left.strip(' .,_;:-')
     right = right.strip()
-    return bool(left and right and left[0].isupper() and any(ch.isalpha() for ch in right) and right[0].isupper())
+    right_starts_like_name = right[0].isupper() or right.lower().startswith(("the ", "a ", "an "))
+    return bool(left and right and left[0].isupper() and any(ch.isalpha() for ch in right) and right_starts_like_name)
 
 
 LETTER_HEADING_RE = re.compile(r"LETTER\s+([IVXLCDM]+|\d+|THE\s+[A-Z-]+)\.?(?:\s+(.*))?$", re.IGNORECASE)
@@ -406,11 +402,15 @@ def _looks_like_correspondent_header(lines: list[str]) -> bool:
     if not lines:
         return False
 
-    first = lines[0].strip()
+    collapsed_lines = _collapse_wrapped_correspondent_lines(lines)
+    if not collapsed_lines:
+        return False
+
+    first = collapsed_lines[0].strip()
     first_upper = first.upper()
-    second = lines[1].strip() if len(lines) > 1 else ""
+    second = collapsed_lines[1].strip() if len(collapsed_lines) > 1 else ""
     second_upper = second.upper()
-    third = lines[2].strip() if len(lines) > 2 else ""
+    third = collapsed_lines[2].strip() if len(collapsed_lines) > 2 else ""
 
     direct_to_header = first_upper.startswith("TO ") and len(first) > 3 and first[3].isupper()
     lowercase_to_header = (
@@ -514,7 +514,7 @@ def _looks_like_letter_heading(lines: list[str], index: int) -> bool:
     )
 
 
-def _find_letter_heading_start(lines: list[str]) -> int | None:
+def _find_letter_heading_start(lines: list[str], title: str = "") -> int | None:
     candidates = [i for i in range(len(lines)) if _looks_like_letter_heading(lines, i)]
     if not candidates:
         return None
@@ -527,6 +527,25 @@ def _find_letter_heading_start(lines: list[str]) -> int | None:
             for candidate in candidates:
                 if candidate > marker:
                     return candidate
+
+    if title:
+        primary_title = re.split(r"[;,:]", title, maxsplit=1)[0]
+        title_markers = {
+            re.sub(r"[^A-Z0-9]+", " ", title.upper()).strip(),
+            re.sub(r"[^A-Z0-9]+", " ", primary_title.upper()).strip(),
+        }
+        title_markers.discard("")
+        matching_markers = [
+            marker
+            for marker, line in enumerate(lines)
+            if (normalized_line := re.sub(r"[^A-Z0-9]+", " ", line.strip().upper()).strip())
+            and normalized_line in title_markers
+        ]
+        if matching_markers:
+            latest_marker = matching_markers[-1]
+            later_candidates = [candidate for candidate in candidates if candidate > latest_marker]
+            if later_candidates:
+                return later_candidates[0]
 
     return candidates[0]
 
@@ -623,7 +642,7 @@ def parse_gutenberg_epistolary(
 
     heading_mode = None
     start_idx = None
-    letter_heading_start = _find_letter_heading_start(lines)
+    letter_heading_start = _find_letter_heading_start(lines, title)
     for i in range(len(lines) - 1):
         if _looks_like_roman_epistolary_heading(lines, i):
             start_idx = i
