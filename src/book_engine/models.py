@@ -12,6 +12,16 @@ class Section:
     title: str
     subtitle: str
     body: list[str]
+    kind: str = "section"
+    body_format: str = "plain"
+
+
+@dataclass
+class FrontMatterConfig:
+    id: str
+    title: str
+    source_file: str
+    source_format: str = "markdown"
 
 
 @dataclass
@@ -27,6 +37,7 @@ class BookConfig:
     theme: str
     source_url: str = ""
     description: str = ""
+    front_matter: list[FrontMatterConfig] = field(default_factory=list)
 
 
 @dataclass

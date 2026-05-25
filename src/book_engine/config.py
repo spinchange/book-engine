@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import yaml
 
-from .models import BookConfig
+from .models import BookConfig, FrontMatterConfig
 
 
 def load_yaml(path: Path) -> dict:
@@ -22,6 +22,26 @@ def load_library_config(root: Path) -> dict:
     return data
 
 
+def _load_front_matter(data: dict) -> list[FrontMatterConfig]:
+    raw_entries = data.get("front_matter", []) or []
+    if not isinstance(raw_entries, list):
+        raise ValueError("front_matter must be a list")
+
+    entries: list[FrontMatterConfig] = []
+    for entry in raw_entries:
+        if not isinstance(entry, dict):
+            raise ValueError("Each front_matter entry must be a mapping")
+        entries.append(
+            FrontMatterConfig(
+                id=entry["id"],
+                title=entry["title"],
+                source_file=entry["source_file"],
+                source_format=entry.get("source_format", "markdown"),
+            )
+        )
+    return entries
+
+
 def load_book_config(path: Path) -> BookConfig:
     data = load_yaml(path)
     return BookConfig(
@@ -36,4 +56,5 @@ def load_book_config(path: Path) -> BookConfig:
         theme=data.get("theme", "classic-paper"),
         source_url=data.get("source_url", ""),
         description=data.get("description", ""),
+        front_matter=_load_front_matter(data),
     )

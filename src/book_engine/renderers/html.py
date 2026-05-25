@@ -40,9 +40,11 @@ a { color: var(--accent); }
 .letter-label { color: var(--accent); text-transform: uppercase; letter-spacing: 0.16em; font-size: .85rem; margin-bottom: .5rem; }
 .letter-title { margin: 0; font-size: clamp(2rem, 3vw, 3rem); }
 .letter-subtitle, .source-note, .muted { color: var(--muted); }
-.letter-body { margin-top: 2rem; font-size: 1.12rem; }
-.letter-body p { margin: 1rem 0; }
+.letter-body, .front-matter-body { margin-top: 2rem; font-size: 1.12rem; }
+.letter-body p, .front-matter-body p { margin: 1rem 0; }
 .letter-body p:first-of-type::first-letter { float: left; font-size: 3.4rem; line-height: .9; padding-right: .4rem; color: var(--accent); }
+.front-matter-body h3 { margin-top: 2rem; }
+.front-matter-body ul { margin: 1rem 0 1rem 1.5rem; }
 .credit { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--accent-soft); color: var(--muted); font-size: .95rem; }
 @media (max-width: 640px) { .container { padding: 1.25rem; } .page-nav { flex-direction: column; } .page-nav .center, .page-nav .right { text-align: left; } .toc-kicker { display: block; min-width: 0; margin-bottom: .2rem; } }
 """
@@ -96,9 +98,9 @@ def render_book(book: Book, output_dir: Path) -> None:
     toc_items = []
     for sec in book.sections:
         meta_html = f'<span class="toc-meta">{escape(sec.subtitle)}</span>' if sec.subtitle else ''
-        show_kicker = not (sec.label == 'Editor' and sec.title.lower().startswith('the editor'))
+        show_kicker = sec.kind != 'front-matter' and not (sec.label == 'Editor' and sec.title.lower().startswith('the editor'))
         kicker_html = f'<span class="toc-kicker">{escape(sec.label)}</span>' if show_kicker else ''
-        title_html = '' if sec.title == sec.label else f'<span class="toc-title">{escape(sec.title)}</span>'
+        title_html = f'<span class="toc-title">{escape(sec.title)}</span>' if sec.kind == 'front-matter' or sec.title != sec.label else ''
         toc_items.append(
             f'<li><a href="{sec.id}.html">{kicker_html}'
             f'{title_html}{meta_html}</a></li>'
@@ -121,9 +123,10 @@ def render_book(book: Book, output_dir: Path) -> None:
     for idx, sec in enumerate(book.sections):
         prev_sec = book.sections[idx - 1] if idx > 0 else None
         next_sec = book.sections[idx + 1] if idx + 1 < len(book.sections) else None
-        body_paras = ''.join(f'<p>{escape(p)}</p>' for p in sec.body)
+        body_content = ''.join(sec.body) if sec.body_format == 'html' else ''.join(f'<p>{escape(p)}</p>' for p in sec.body)
         subtitle_html = f'<p class="letter-subtitle">{escape(sec.subtitle)}</p>' if sec.subtitle else ''
-        label_html = '' if sec.title == sec.label else f'<div class="letter-label">{escape(sec.label)}</div>'
+        label_html = '' if sec.kind == 'front-matter' or sec.title == sec.label else f'<div class="letter-label">{escape(sec.label)}</div>'
+        body_class = 'front-matter-body' if sec.kind == 'front-matter' else 'letter-body'
         page_body = f'''
 <header class="header">
   <h1>{escape(book.config.title)}</h1>
@@ -134,8 +137,9 @@ def render_book(book: Book, output_dir: Path) -> None:
   <h2 class="letter-title">{escape(sec.title)}</h2>
   {subtitle_html}
   {_nav(prev_sec, next_sec)}
-  <section class="letter-body">{body_paras}</section>
+  <section class="{body_class}">{body_content}</section>
   {_nav(prev_sec, next_sec)}
   <p class="credit"><a href="index.html">Book contents</a> · <a href="../../index.html">Library index</a></p>
 </main>'''
-        (book_dir / f'{sec.id}.html').write_text(_page(f'{book.config.title} — {sec.label}', page_body), encoding='utf-8')
+        page_title = sec.title if sec.kind == 'front-matter' else sec.label
+        (book_dir / f'{sec.id}.html').write_text(_page(f'{book.config.title} — {page_title}', page_body), encoding='utf-8')

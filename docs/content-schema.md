@@ -25,11 +25,32 @@ parser: gutenberg-letters-v1
 theme: regency-paper
 source_url: https://www.gutenberg.org/cache/epub/946/pg946.txt
 description: Jane Austen's epistolary novella rendered as linked HTML pages.
+front_matter:
+  - id: translators-note
+    title: Translator's Note
+    source_file: translator-note.md
+    source_format: markdown
 ```
 
 ## Profile-specific expectations
 
-## `source_format`
+## Optional `front_matter`
+
+A book can now define optional front-matter pages that are rendered before the main section sequence.
+
+Each entry currently supports:
+- `id` — output filename stem (for example `translators-note` → `translators-note.html`)
+- `title` — page title and TOC label
+- `source_file` — local file under the book directory
+- `source_format` — currently `markdown` (default) or `plain-txt`
+
+Behavior:
+- front matter pages appear in the book TOC before Letter I / Chapter I
+- prev/next navigation includes front matter pages in sequence
+- markdown sources strip an opening matching `# Heading` line when it duplicates the configured title
+- markdown currently supports paragraph blocks, second-level headings, unordered lists, emphasis, and inline code
+
+### `source_format`
 
 - `gutenberg-txt`
   - expects Project Gutenberg start/end markers
