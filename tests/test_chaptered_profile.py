@@ -160,6 +160,33 @@ He seems a very civil fellow.
 *** END OF THE PROJECT GUTENBERG EBOOK THE DIARY OF A NOBODY ***
 """
 
+LIFE_TANGLES_STYLE_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK LIFE-TANGLES ***
+
+CHAPTER I.
+
+_THE RETURN FROM INDIA._
+
+_December 12th._
+
+THE day after to-morrow will be a great day in my life,
+is coming home with the dear little twins.
+
+It is nearly seven years since my father and mother went out last
+to India; and the twins were only one year old when I saw them.
+
+
+CHAPTER II.
+
+_ANOTHER TURN._
+
+_December 13th._
+
+While I was writing in my journal yesterday evening,
+aunt Jessie rapped at my door.
+
+*** END OF THE PROJECT GUTENBERG EBOOK LIFE-TANGLES ***
+"""
+
 WERTHER_STYLE_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK 2527 ***
 
 PREFACE
@@ -438,6 +465,24 @@ def test_parse_chaptered_text_preserves_wrapped_authorial_synopsis(tmp_path: Pat
     ]
 
 
+def test_parse_chaptered_text_keeps_life_tangles_journal_opening_in_body(tmp_path: Path) -> None:
+    source = tmp_path / "life-tangles.txt"
+    source.write_text(LIFE_TANGLES_STYLE_TEXT, encoding="utf-8")
+
+    sections = parse_chaptered_text(source, "Life-tangles : or, The journal of Rhoda Frith")
+
+    assert [section.id for section in sections] == ["chapter-i", "chapter-ii"]
+    assert sections[0].title == "_THE RETURN FROM INDIA._"
+    assert sections[0].body == [
+        "_December 12th._ THE day after to-morrow will be a great day in my life, is coming home with the dear little twins.",
+        "It is nearly seven years since my father and mother went out last to India; and the twins were only one year old when I saw them.",
+    ]
+    assert sections[1].title == "_ANOTHER TURN._"
+    assert sections[1].body == [
+        "_December 13th._ While I was writing in my journal yesterday evening, aunt Jessie rapped at my door.",
+    ]
+
+
 def test_parse_chaptered_text_supports_book_headings_and_editorial_coda(tmp_path: Path) -> None:
     source = tmp_path / "werther-style.txt"
     source.write_text(WERTHER_STYLE_TEXT, encoding="utf-8")
@@ -679,6 +724,44 @@ theme: classic-paper
     assert (output_dir / "books" / "plain-chaptered" / "index.html").exists()
     assert (output_dir / "books" / "plain-chaptered" / "chapter-i.html").exists()
     assert (output_dir / "books" / "plain-chaptered" / "chapter-ii.html").exists()
+
+
+def test_build_library_supports_life_tangles_style_chaptered_book(tmp_path: Path) -> None:
+    content_root = tmp_path / "library"
+    books_dir = content_root / "books"
+    book_dir = books_dir / "life-tangles"
+    book_dir.mkdir(parents=True)
+
+    (content_root / "library.yaml").write_text(
+        """title: Life-tangles Library
+books_dir: books
+output_dir: dist
+""",
+        encoding="utf-8",
+    )
+    (book_dir / "book.yaml").write_text(
+        """id: life-tangles
+title: "Life-tangles : or, The journal of Rhoda Frith"
+author: Agnes Giberne
+year: \"1896\"
+source_file: source.txt
+source_format: gutenberg-txt
+profile: chaptered
+parser: gutenberg-chapters-v1
+theme: classic-paper
+""",
+        encoding="utf-8",
+    )
+    (book_dir / "source.txt").write_text(LIFE_TANGLES_STYLE_TEXT, encoding="utf-8")
+
+    output_dir = build_library(content_root)
+
+    assert (output_dir / "index.html").exists()
+    assert (output_dir / "books" / "life-tangles" / "index.html").exists()
+    assert (output_dir / "books" / "life-tangles" / "chapter-i.html").exists()
+    chapter_i_html = (output_dir / "books" / "life-tangles" / "chapter-i.html").read_text(encoding="utf-8")
+    assert '<h2 class="letter-title">_THE RETURN FROM INDIA._</h2>' in chapter_i_html
+    assert '<section class="letter-body"><p>_December 12th._ THE day after to-morrow will be a great day in my life, is coming home with the dear little twins.</p>' in chapter_i_html
 
 
 def test_build_library_supports_werther_style_book_sections(tmp_path: Path) -> None:

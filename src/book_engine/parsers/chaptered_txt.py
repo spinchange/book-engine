@@ -114,13 +114,14 @@ def _slugify_label(text: str) -> str:
 
 
 def _looks_like_short_date_heading(text: str) -> bool:
-    cleaned = text.strip().rstrip(".")
+    cleaned = text.strip().strip("_").rstrip(".").strip()
     if not cleaned:
         return False
 
     month_match = re.fullmatch(
-        r"(?:JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)\s+\d{1,2}(?:,\s*\d{4})?",
+        r"(?:JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)\s+\d{1,2}(?:ST|ND|RD|TH)?(?:,\s*\d{4})?",
         cleaned,
+        re.IGNORECASE,
     )
     weekday_match = re.fullmatch(
         r"(?:MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY),\s+\d{1,2}(?:\s+[A-Z]+)*",
@@ -153,6 +154,17 @@ def _looks_like_body_opening_paragraph(text: str, line_count: int = 1) -> bool:
     return False
 
 
+def _looks_like_wrapped_body_opening_line(text: str) -> bool:
+    cleaned = text.strip()
+    if not cleaned or cleaned.startswith("_"):
+        return False
+    words = cleaned.split()
+    if len(words) < 6:
+        return False
+    first_word = words[0].strip('“"\'"').rstrip('.,;:!?')
+    return bool(first_word) and first_word[0].isupper() and any(ch.islower() for ch in cleaned[1:])
+
+
 def _looks_like_short_chapter_title(text: str) -> bool:
     cleaned = text.strip()
     if not cleaned or cleaned.endswith((".", "!", "?", ":")):
@@ -176,6 +188,14 @@ def _looks_like_short_chapter_title(text: str) -> bool:
             continue
         return False
     return saw_titlecase_word
+
+
+def _looks_like_emphasized_chapter_heading_line(text: str) -> bool:
+    cleaned = text.strip()
+    if not (cleaned.startswith("_") and cleaned.endswith("_")):
+        return False
+    inner = cleaned.strip("_").strip()
+    return bool(inner) and len(inner.split()) <= 8
 
 
 def _normalize_heading_comparison(text: str) -> str:
@@ -232,6 +252,15 @@ def _consume_sparse_wrapped_title_block(chunk_lines: list[str]) -> tuple[list[st
         if _line_starts_heading(candidate):
             break
         if candidate:
+            if title_parts and (
+                _looks_like_body_opening_paragraph(candidate, line_count=1)
+                or _looks_like_wrapped_body_opening_line(candidate)
+            ):
+                if all(
+                    _looks_like_emphasized_chapter_heading_line(part) or _looks_like_short_date_heading(part)
+                    for part in title_parts
+                ):
+                    return title_parts, chunk_lines[scan_index:]
             title_parts.append(candidate)
             blank_run = 0
         else:
@@ -302,7 +331,15 @@ def parse_chaptered_text(
                     candidate_title_parts, candidate_remainder = sparse_wrapped_title
                     candidate_title = re.sub(r"\s+", " ", " ".join(candidate_title_parts)).strip()
                     if not _looks_like_body_opening_paragraph(candidate_title, line_count=len(candidate_title_parts)):
-                        title_parts, chunk_lines = candidate_title_parts, candidate_remainder
+                        if (
+                            candidate_title_parts
+                            and _looks_like_emphasized_chapter_heading_line(candidate_title_parts[0])
+                            and all(_looks_like_short_date_heading(part) for part in candidate_title_parts[1:])
+                        ):
+                            title_parts = [candidate_title_parts[0]]
+                            chunk_lines = candidate_title_parts[1:] + candidate_remainder
+                        else:
+                            title_parts, chunk_lines = candidate_title_parts, candidate_remainder
                 elif chunk_lines and chunk_lines[0].strip():
                     probe_index = 0
                     candidate_lines: list[str] = []
