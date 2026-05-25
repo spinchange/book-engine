@@ -305,6 +305,40 @@ I imagined, indeed, that you would have been cloyed and tired.
 """
 
 
+LOVE_AND_FREINDSHIP_STYLE_TEXT = """LOVE AND FREINDSHIP
+
+LETTER the FIRST
+
+From ISABEL to LAURA
+
+How often, in answer to my repeated intreaties that you would give my Daughter a regular detail of the Misfortunes and Adventures of your Life, have you said “No, my freind never will I comply with your request till I may be no longer in Danger of again experiencing such dreadful ones.”
+
+LETTER 2nd
+
+LAURA to ISABEL
+
+My Father was a native of Ireland and an inhabitant of Wales; my Mother was the natural Daughter of a Welch Opera-girl.
+
+LETTER 8th
+
+LAURA to MARIANNE, in continuation
+
+We remained but a few Days after the Affair at Pembroke in Wales.
+
+LETTER the 9th
+
+From the same to the same
+
+Our party was soon joined by a young Widow.
+
+LETTER 10th
+
+LAURA in continuation.
+
+Though pleased to find ourselves once more in quiet possession of our Apartment, our joy was far from being complete.
+"""
+
+
 SELF_MADE_MERCHANT_STYLE_TEXT = """*** START OF THE PROJECT GUTENBERG EBOOK LETTERS FROM A SELF-MADE MERCHANT TO HIS SON ***
 
 LETTERS _from a_ SELF-MADE MERCHANT _to his_ SON
@@ -867,6 +901,23 @@ def test_parse_gutenberg_epistolary_skips_prefatory_letter_excerpt_and_supports_
     assert sections[1].body == ["Return, my dear Viscount, return!"]
 
 
+def test_parse_gutenberg_epistolary_supports_love_and_freindship_mixed_ordinals(tmp_path: Path) -> None:
+    source = tmp_path / "love-and-freindship-sample.txt"
+    source.write_text(LOVE_AND_FREINDSHIP_STYLE_TEXT, encoding="utf-8")
+
+    sections = parse_gutenberg_epistolary(source, "Love and Freindship [sic]", source_format="plain-txt")
+
+    assert [section.id for section in sections] == ["letter-i", "letter-2", "letter-8", "letter-9", "letter-10"]
+    assert [section.label for section in sections] == ["Letter I", "Letter 2", "Letter 8", "Letter 9", "Letter 10"]
+    assert sections[0].title == "From ISABEL to LAURA"
+    assert sections[0].body == [
+        "How often, in answer to my repeated intreaties that you would give my Daughter a regular detail of the Misfortunes and Adventures of your Life, have you said “No, my freind never will I comply with your request till I may be no longer in Danger of again experiencing such dreadful ones.”"
+    ]
+    assert sections[2].title == "LAURA to MARIANNE, in continuation"
+    assert sections[3].title == "From the same to the same"
+    assert sections[4].title == "LAURA in continuation."
+
+
 def test_parse_gutenberg_epistolary_disambiguates_duplicate_letter_ids(tmp_path: Path) -> None:
     source = tmp_path / "duplicate-labels.txt"
     source.write_text(DUPLICATE_LABELS_TEXT, encoding="utf-8")
@@ -1034,6 +1085,45 @@ theme: classic-paper
     assert (output_dir / "books" / "fanny-hill-sample" / "index.html").exists()
     assert (output_dir / "books" / "fanny-hill-sample" / "letter-i.html").exists()
     assert (output_dir / "books" / "fanny-hill-sample" / "letter-ii.html").exists()
+
+
+def test_build_library_supports_love_and_freindship_plain_text_epistolary_book(tmp_path: Path) -> None:
+    content_root = tmp_path / "library"
+    books_dir = content_root / "books"
+    book_dir = books_dir / "love-and-freindship-sample"
+    book_dir.mkdir(parents=True)
+
+    (content_root / "library.yaml").write_text(
+        """title: Love and Freindship Library
+books_dir: books
+output_dir: dist
+""",
+        encoding="utf-8",
+    )
+    (book_dir / "book.yaml").write_text(
+        """id: love-and-freindship-sample
+title: Love and Freindship [sic]
+author: Jane Austen
+year: \"1790\"
+source_file: source.txt
+source_format: plain-txt
+profile: epistolary
+parser: gutenberg-letters-v1
+theme: classic-paper
+""",
+        encoding="utf-8",
+    )
+    (book_dir / "source.txt").write_text(LOVE_AND_FREINDSHIP_STYLE_TEXT, encoding="utf-8")
+
+    output_dir = build_library(content_root)
+
+    assert (output_dir / "index.html").exists()
+    assert (output_dir / "books" / "love-and-freindship-sample" / "index.html").exists()
+    assert (output_dir / "books" / "love-and-freindship-sample" / "letter-i.html").exists()
+    assert (output_dir / "books" / "love-and-freindship-sample" / "letter-2.html").exists()
+    assert (output_dir / "books" / "love-and-freindship-sample" / "letter-8.html").exists()
+    assert (output_dir / "books" / "love-and-freindship-sample" / "letter-9.html").exists()
+    assert (output_dir / "books" / "love-and-freindship-sample" / "letter-10.html").exists()
 
 
 def test_build_library_supports_self_made_merchant_style_epistolary_book(tmp_path: Path) -> None:

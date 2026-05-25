@@ -332,7 +332,10 @@ def _looks_like_italic_correspondent_header(line: str) -> bool:
     return bool(left and right and left[0].isupper() and any(ch.isalpha() for ch in right) and right_starts_like_name)
 
 
-LETTER_HEADING_RE = re.compile(r"LETTER\s+([IVXLCDM]+|\d+|THE\s+[A-Z-]+)\.?(?:\s+(.*))?$", re.IGNORECASE)
+LETTER_HEADING_RE = re.compile(
+    r"LETTER\s+([IVXLCDM]+|(?:THE\s+)?\d+(?:ST|ND|RD|TH)?|THE\s+[A-Z-]+)\.?(?:\s+(.*))?$",
+    re.IGNORECASE,
+)
 
 SPELLED_ORDINAL_TO_ROMAN = {
     "THE FIRST": "I",
@@ -364,6 +367,11 @@ def _normalize_letter_heading_label(raw_label: str) -> str | None:
         return normalized
     if re.fullmatch(r"\d+", normalized):
         return normalized
+
+    ordinal_match = re.fullmatch(r"(?:THE\s+)?(\d+)(?:ST|ND|RD|TH)", normalized)
+    if ordinal_match:
+        return ordinal_match.group(1)
+
     return SPELLED_ORDINAL_TO_ROMAN.get(normalized)
 
 
